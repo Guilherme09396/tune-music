@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      listening_history: {
+        Row: {
+          artist: string
+          duration: number
+          id: string
+          played_at: string
+          thumbnail: string
+          title: string
+          track_id: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          artist: string
+          duration?: number
+          id?: string
+          played_at?: string
+          thumbnail?: string
+          title: string
+          track_id: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          artist?: string
+          duration?: number
+          id?: string
+          played_at?: string
+          thumbnail?: string
+          title?: string
+          track_id?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      playlist_tracks: {
+        Row: {
+          added_at: string
+          artist: string
+          duration: number
+          id: string
+          playlist_id: string
+          position: number
+          thumbnail: string
+          title: string
+          track_id: string
+          url: string
+        }
+        Insert: {
+          added_at?: string
+          artist: string
+          duration?: number
+          id?: string
+          playlist_id: string
+          position?: number
+          thumbnail?: string
+          title: string
+          track_id: string
+          url: string
+        }
+        Update: {
+          added_at?: string
+          artist?: string
+          duration?: number
+          id?: string
+          playlist_id?: string
+          position?: number
+          thumbnail?: string
+          title?: string
+          track_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "playlist_tracks_playlist_id_fkey"
+            columns: ["playlist_id"]
+            isOneToOne: false
+            referencedRelation: "playlists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      playlists: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

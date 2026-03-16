@@ -14,7 +14,7 @@ interface SidebarProps {
   playlists: PlaylistMeta[];
   activeView: string;
   onViewChange: (view: string) => void;
-  onCreatePlaylist: (name: string) => void;
+  onCreatePlaylist: (name: string) => void | Promise<string>;
 }
 
 export default function Sidebar({ playlists, activeView, onViewChange, onCreatePlaylist }: SidebarProps) {

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Track } from "@/lib/api";
 
@@ -13,36 +14,66 @@ export function useListeningHistory() {
   const { user } = useAuth();
   const [history, setHistory] = useState<HistoryEntry[]>([]);
 
-  useEffect(() => {
+  const fetchHistory = useCallback(async () => {
     if (!user) { setHistory([]); return; }
-    const key = `soundflow_history_${user.id}`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      try { setHistory(JSON.parse(saved)); } catch { setHistory([]); }
-    }
+    const { data, error } = await supabase
+      .from("listening_history")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("played_at", { ascending: false })
+      .limit(MAX_HISTORY);
+
+    if (error) { console.error("Error fetching history:", error); return; }
+
+    setHistory((data || []).map(d => ({
+      track: {
+        id: d.track_id,
+        title: d.title,
+        artist: d.artist,
+        duration: Number(d.duration),
+        thumbnail: d.thumbnail,
+        url: d.url,
+      },
+      playedAt: new Date(d.played_at).getTime(),
+    })));
   }, [user]);
 
-  const persist = useCallback((entries: HistoryEntry[]) => {
+  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+
+  const addToHistory = useCallback(async (track: Track) => {
     if (!user) return;
-    localStorage.setItem(`soundflow_history_${user.id}`, JSON.stringify(entries));
-  }, [user]);
 
-  const addToHistory = useCallback((track: Track) => {
-    setHistory(prev => {
-      // Remove duplicate if exists
-      const filtered = prev.filter(e => e.track.id !== track.id);
-      const next = [{ track, playedAt: Date.now() }, ...filtered].slice(0, MAX_HISTORY);
-      persist(next);
-      return next;
+    // Delete previous entry for same track to avoid duplicates
+    await supabase
+      .from("listening_history")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("track_id", track.id);
+
+    const now = new Date().toISOString();
+    await supabase.from("listening_history").insert({
+      user_id: user.id,
+      track_id: track.id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      thumbnail: track.thumbnail,
+      url: track.url,
+      played_at: now,
     });
-  }, [persist]);
 
-  const clearHistory = useCallback(() => {
-    setHistory([]);
-    if (user) localStorage.removeItem(`soundflow_history_${user.id}`);
+    setHistory(prev => {
+      const filtered = prev.filter(e => e.track.id !== track.id);
+      return [{ track, playedAt: Date.now() }, ...filtered].slice(0, MAX_HISTORY);
+    });
   }, [user]);
 
-  // Get unique artists from history for recommendations
+  const clearHistory = useCallback(async () => {
+    if (!user) return;
+    await supabase.from("listening_history").delete().eq("user_id", user.id);
+    setHistory([]);
+  }, [user]);
+
   const topArtists = Array.from(
     new Set(history.map(e => e.track.artist))
   ).slice(0, 5);

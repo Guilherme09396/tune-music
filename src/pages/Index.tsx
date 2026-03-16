@@ -8,6 +8,7 @@ import HistoryView from "@/components/HistoryView";
 import { usePlaylistStore } from "@/hooks/usePlaylistStore";
 import { PlayerProvider, usePlayer } from "@/contexts/PlayerContext";
 import { useListeningHistory } from "@/hooks/useListeningHistory";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Track } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -17,10 +18,12 @@ import { Button } from "@/components/ui/button";
 
 function AppContent() {
   const [activeView, setActiveView] = useState("home");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist } = usePlaylistStore();
   const [addToPlaylistTrack, setAddToPlaylistTrack] = useState<Track | null>(null);
   const { addToHistory } = useListeningHistory();
   const { currentTrack } = usePlayer();
+  const isMobile = useIsMobile();
 
   // Track listening history
   useEffect(() => {
@@ -28,6 +31,12 @@ function AppContent() {
       addToHistory(currentTrack);
     }
   }, [currentTrack?.id]);
+
+  // Close sidebar on navigation in mobile
+  const handleViewChange = (view: string) => {
+    setActiveView(view);
+    if (isMobile) setSidebarOpen(false);
+  };
 
   const activePlaylist = useMemo(() => {
     if (!activeView.startsWith("playlist:")) return null;
@@ -37,8 +46,9 @@ function AppContent() {
 
   const handleAddToPlaylist = (track: Track) => {
     if (playlists.length === 0) {
-      const id = createPlaylist("Minha Playlist");
-      addTrackToPlaylist(id, track);
+      createPlaylist("Minha Playlist").then(id => {
+        if (id) addTrackToPlaylist(id, track);
+      });
     } else if (playlists.length === 1) {
       addTrackToPlaylist(playlists[0].id, track);
     } else {
@@ -48,16 +58,34 @@ function AppContent() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <Sidebar
-        playlists={playlists.map(p => ({ id: p.id, name: p.name }))}
-        activeView={activeView}
-        onViewChange={setActiveView}
-        onCreatePlaylist={createPlaylist}
-      />
+      {/* Mobile overlay */}
+      {isMobile && sidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
+      )}
+
+      {/* Sidebar */}
+      <div className={`${isMobile ? 'fixed inset-y-0 left-0 z-50 transition-transform duration-300' : ''} ${isMobile && !sidebarOpen ? '-translate-x-full' : 'translate-x-0'}`}>
+        <Sidebar
+          playlists={playlists.map(p => ({ id: p.id, name: p.name }))}
+          activeView={activeView}
+          onViewChange={handleViewChange}
+          onCreatePlaylist={createPlaylist}
+        />
+      </div>
 
       <main className="flex-1 flex flex-col min-w-0">
+        {/* Mobile header */}
+        {isMobile && (
+          <div className="flex items-center gap-3 p-4 border-b border-border/50">
+            <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl hover:bg-muted/50 transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+            </button>
+            <span className="text-lg font-bold text-gradient">SoundFlow</span>
+          </div>
+        )}
+
         {activeView === "home" && (
-          <HomeView onNavigate={setActiveView} />
+          <HomeView onNavigate={handleViewChange} />
         )}
         {activeView === "search" && (
           <SearchView onAddToPlaylist={handleAddToPlaylist} />
