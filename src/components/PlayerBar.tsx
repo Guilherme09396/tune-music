@@ -1,12 +1,14 @@
+import { useState } from "react";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { formatDuration } from "@/lib/api";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download
+  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download, ChevronUp, ChevronDown
 } from "lucide-react";
 import { getDownloadUrl } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function PlayerBar() {
   const {
@@ -14,6 +16,8 @@ export default function PlayerBar() {
     togglePlay, seekTo, setVolume, nextTrack, prevTrack,
     isShuffle, toggleShuffle, repeatMode, toggleRepeat,
   } = usePlayer();
+  const isMobile = useIsMobile();
+  const [expanded, setExpanded] = useState(false);
 
   if (!currentTrack) return null;
 
@@ -29,6 +33,92 @@ export default function PlayerBar() {
 
   const VolumeIcon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
 
+  // Mobile expanded player
+  if (isMobile && expanded) {
+    return (
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        className="fixed inset-0 z-50 flex flex-col bg-background p-6"
+      >
+        <button onClick={() => setExpanded(false)} className="self-center mb-6 p-2 text-muted-foreground">
+          <ChevronDown className="h-6 w-6" />
+        </button>
+
+        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+          <img
+            src={currentTrack.thumbnail}
+            alt={currentTrack.title}
+            className={`w-64 h-64 rounded-2xl object-cover shadow-2xl ${isPlaying ? "animate-pulse-glow" : ""}`}
+          />
+          <div className="text-center w-full px-4">
+            <p className="text-lg font-bold truncate text-foreground">{currentTrack.title}</p>
+            <p className="text-sm text-muted-foreground mt-1">{currentTrack.artist}</p>
+          </div>
+
+          {/* Progress */}
+          <div className="w-full px-2">
+            <input
+              type="range" min={0} max={duration || 100} value={currentTime}
+              onChange={e => seekTo(Number(e.target.value))}
+              className="w-full h-1"
+              style={{ background: `linear-gradient(to right, hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}%)` }}
+            />
+            <div className="flex justify-between mt-1">
+              <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(currentTime)}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(duration)}</span>
+            </div>
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center gap-6">
+            <button onClick={toggleShuffle} className={`p-2 rounded-lg ${isShuffle ? "text-primary" : "text-muted-foreground"}`}>
+              <Shuffle className="h-5 w-5" />
+            </button>
+            <button onClick={prevTrack} className="p-2 text-foreground"><SkipBack className="h-6 w-6" /></button>
+            <button onClick={togglePlay} className="flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lg">
+              {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-0.5" />}
+            </button>
+            <button onClick={nextTrack} className="p-2 text-foreground"><SkipForward className="h-6 w-6" /></button>
+            <button onClick={toggleRepeat} className={`p-2 rounded-lg ${repeatMode !== "off" ? "text-primary" : "text-muted-foreground"}`}>
+              {repeatMode === "one" ? <Repeat1 className="h-5 w-5" /> : <Repeat className="h-5 w-5" />}
+            </button>
+          </div>
+
+          <button onClick={handleDownload} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mt-2">
+            <Download className="h-4 w-4" /> Baixar
+          </button>
+        </div>
+      </motion.div>
+    );
+  }
+
+  // Mobile compact player
+  if (isMobile) {
+    return (
+      <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/50" style={{ background: "hsl(var(--player-bg))" }}>
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-muted/30">
+          <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="flex items-center gap-3 px-3 py-2" onClick={() => setExpanded(true)}>
+          <img src={currentTrack.thumbnail} alt="" className="h-10 w-10 rounded-lg object-cover" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold truncate text-foreground">{currentTrack.title}</p>
+            <p className="text-[10px] text-muted-foreground truncate">{currentTrack.artist}</p>
+          </div>
+          <button onClick={e => { e.stopPropagation(); togglePlay(); }} className="p-2">
+            {isPlaying ? <Pause className="h-5 w-5 text-foreground" /> : <Play className="h-5 w-5 text-foreground" />}
+          </button>
+          <button onClick={e => { e.stopPropagation(); nextTrack(); }} className="p-2">
+            <SkipForward className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop player (unchanged)
   return (
     <AnimatePresence>
       <motion.div
@@ -40,7 +130,6 @@ export default function PlayerBar() {
           backdropFilter: "blur(24px)",
         }}
       >
-        {/* Progress bar at top of player */}
         <div className="absolute top-0 left-0 right-0 h-1 bg-muted/30 cursor-pointer group"
           onClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -48,114 +137,51 @@ export default function PlayerBar() {
             seekTo(pct * duration);
           }}
         >
-          <div
-            className="h-full bg-primary transition-all duration-150 relative"
-            style={{ width: `${progress}%` }}
-          >
+          <div className="h-full bg-primary transition-all duration-150 relative" style={{ width: `${progress}%` }}>
             <div className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-3 rounded-full bg-primary glow-primary-sm opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
         </div>
 
         <div className="mx-auto flex h-20 max-w-screen-2xl items-center gap-4 px-4">
-          {/* Track info */}
           <div className="flex items-center gap-3 w-[280px] min-w-0">
-            <div className="relative flex-shrink-0">
-              <img
-                src={currentTrack.thumbnail}
-                alt={currentTrack.title}
-                className={`h-14 w-14 rounded-xl object-cover shadow-xl ${isPlaying ? "animate-pulse-glow" : ""}`}
-              />
-            </div>
+            <img src={currentTrack.thumbnail} alt={currentTrack.title} className={`h-14 w-14 rounded-xl object-cover shadow-xl ${isPlaying ? "animate-pulse-glow" : ""}`} />
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate text-foreground">{currentTrack.title}</p>
               <p className="text-xs text-muted-foreground truncate mt-0.5">{currentTrack.artist}</p>
             </div>
-            <button
-              onClick={handleDownload}
-              className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex-shrink-0 ml-1"
-              title="Baixar"
-            >
+            <button onClick={handleDownload} className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all flex-shrink-0 ml-1" title="Baixar">
               <Download className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Controls */}
           <div className="flex flex-1 flex-col items-center gap-1.5">
             <div className="flex items-center gap-5">
-              <button
-                onClick={toggleShuffle}
-                className={`p-1.5 rounded-lg transition-all ${
-                  isShuffle ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
+              <button onClick={toggleShuffle} className={`p-1.5 rounded-lg transition-all ${isShuffle ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"}`}>
                 <Shuffle className="h-4 w-4" />
               </button>
-              <button onClick={prevTrack} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
-                <SkipBack className="h-5 w-5" />
-              </button>
-              <button
-                onClick={togglePlay}
-                className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background hover:scale-110 transition-all duration-200 shadow-lg"
-              >
+              <button onClick={prevTrack} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"><SkipBack className="h-5 w-5" /></button>
+              <button onClick={togglePlay} className="flex h-10 w-10 items-center justify-center rounded-full bg-foreground text-background hover:scale-110 transition-all duration-200 shadow-lg">
                 {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-0.5" />}
               </button>
-              <button onClick={nextTrack} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
-                <SkipForward className="h-5 w-5" />
-              </button>
-              <button
-                onClick={toggleRepeat}
-                className={`p-1.5 rounded-lg transition-all ${
-                  repeatMode !== "off" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
+              <button onClick={nextTrack} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"><SkipForward className="h-5 w-5" /></button>
+              <button onClick={toggleRepeat} className={`p-1.5 rounded-lg transition-all ${repeatMode !== "off" ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"}`}>
                 {repeatMode === "one" ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
               </button>
             </div>
-
-            {/* Time display */}
             <div className="flex w-full max-w-md items-center gap-2">
-              <span className="text-[11px] text-muted-foreground w-10 text-right tabular-nums">
-                {formatDuration(currentTime)}
-              </span>
+              <span className="text-[11px] text-muted-foreground w-10 text-right tabular-nums">{formatDuration(currentTime)}</span>
               <div className="relative flex-1">
-                <input
-                  type="range"
-                  min={0}
-                  max={duration || 100}
-                  value={currentTime}
-                  onChange={e => seekTo(Number(e.target.value))}
-                  className="w-full h-1 cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}%)`,
-                  }}
-                />
+                <input type="range" min={0} max={duration || 100} value={currentTime} onChange={e => seekTo(Number(e.target.value))} className="w-full h-1 cursor-pointer" style={{ background: `linear-gradient(to right, hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}%)` }} />
               </div>
-              <span className="text-[11px] text-muted-foreground w-10 tabular-nums">
-                {formatDuration(duration)}
-              </span>
+              <span className="text-[11px] text-muted-foreground w-10 tabular-nums">{formatDuration(duration)}</span>
             </div>
           </div>
 
-          {/* Volume */}
           <div className="flex items-center gap-2 w-[160px] justify-end">
-            <button
-              onClick={() => setVolume(volume === 0 ? 0.7 : 0)}
-              className="p-1.5 text-muted-foreground hover:text-foreground transition-colors"
-            >
+            <button onClick={() => setVolume(volume === 0 ? 0.7 : 0)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
               <VolumeIcon className="h-4 w-4" />
             </button>
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.01}
-              value={volume}
-              onChange={e => setVolume(Number(e.target.value))}
-              className="w-24 h-1"
-              style={{
-                background: `linear-gradient(to right, hsl(var(--primary)) ${volume * 100}%, hsl(var(--muted)) ${volume * 100}%)`,
-              }}
-            />
+            <input type="range" min={0} max={1} step={0.01} value={volume} onChange={e => setVolume(Number(e.target.value))} className="w-24 h-1" style={{ background: `linear-gradient(to right, hsl(var(--primary)) ${volume * 100}%, hsl(var(--muted)) ${volume * 100}%)` }} />
           </div>
         </div>
       </motion.div>
