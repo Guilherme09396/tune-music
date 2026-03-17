@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
+import SharedPlaylist from "./pages/SharedPlaylist.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,7 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+            <Route path="/shared/:shareId" element={<SharedPlaylist />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
