@@ -6,6 +6,7 @@ import PlayerBar from "@/components/PlayerBar";
 import HomeView from "@/components/HomeView";
 import HistoryView from "@/components/HistoryView";
 import { usePlaylistStore } from "@/hooks/usePlaylistStore";
+import { useOfflineStorage } from "@/hooks/useOfflineStorage";
 import { PlayerProvider, usePlayer } from "@/contexts/PlayerContext";
 import { useListeningHistory } from "@/hooks/useListeningHistory";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -19,20 +20,22 @@ import { Button } from "@/components/ui/button";
 function AppContent() {
   const [activeView, setActiveView] = useState("home");
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { playlists, createPlaylist, deletePlaylist, addTrackToPlaylist, removeTrackFromPlaylist } = usePlaylistStore();
+  const {
+    playlists, createPlaylist, deletePlaylist, addTrackToPlaylist,
+    removeTrackFromPlaylist, updateVisibility, getShareLink,
+  } = usePlaylistStore();
+  const {
+    saveTrackOffline, savePlaylistOffline, isTrackOffline, isTrackSaving,
+  } = useOfflineStorage();
   const [addToPlaylistTrack, setAddToPlaylistTrack] = useState<Track | null>(null);
   const { addToHistory } = useListeningHistory();
   const { currentTrack } = usePlayer();
   const isMobile = useIsMobile();
 
-  // Track listening history
   useEffect(() => {
-    if (currentTrack) {
-      addToHistory(currentTrack);
-    }
+    if (currentTrack) addToHistory(currentTrack);
   }, [currentTrack?.id]);
 
-  // Close sidebar on navigation in mobile
   const handleViewChange = (view: string) => {
     setActiveView(view);
     if (isMobile) setSidebarOpen(false);
@@ -58,12 +61,10 @@ function AppContent() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Mobile overlay */}
       {isMobile && sidebarOpen && (
         <div className="fixed inset-0 z-40 bg-background/60 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
       <div className={`${isMobile ? 'fixed inset-y-0 left-0 z-50 transition-transform duration-300' : ''} ${isMobile && !sidebarOpen ? '-translate-x-full' : 'translate-x-0'}`}>
         <Sidebar
           playlists={playlists.map(p => ({ id: p.id, name: p.name }))}
@@ -74,7 +75,6 @@ function AppContent() {
       </div>
 
       <main className="flex-1 flex flex-col min-w-0">
-        {/* Mobile header */}
         {isMobile && (
           <div className="flex items-center gap-3 p-4 border-b border-border/50">
             <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-xl hover:bg-muted/50 transition-colors">
@@ -84,30 +84,26 @@ function AppContent() {
           </div>
         )}
 
-        {activeView === "home" && (
-          <HomeView onNavigate={handleViewChange} />
-        )}
-        {activeView === "search" && (
-          <SearchView onAddToPlaylist={handleAddToPlaylist} />
-        )}
-        {activeView === "history" && (
-          <HistoryView />
-        )}
+        {activeView === "home" && <HomeView onNavigate={handleViewChange} />}
+        {activeView === "search" && <SearchView onAddToPlaylist={handleAddToPlaylist} />}
+        {activeView === "history" && <HistoryView />}
         {activePlaylist && (
           <PlaylistView
             playlist={activePlaylist}
             onRemoveTrack={trackId => removeTrackFromPlaylist(activePlaylist.id, trackId)}
-            onDeletePlaylist={() => {
-              deletePlaylist(activePlaylist.id);
-              setActiveView("home");
-            }}
+            onDeletePlaylist={() => { deletePlaylist(activePlaylist.id); setActiveView("home"); }}
+            onUpdateVisibility={v => updateVisibility(activePlaylist.id, v)}
+            shareLink={getShareLink(activePlaylist.id)}
+            onSaveOffline={savePlaylistOffline}
+            isTrackOffline={isTrackOffline}
+            onSaveTrackOffline={saveTrackOffline}
+            isTrackSaving={isTrackSaving}
           />
         )}
       </main>
 
       <PlayerBar />
 
-      {/* Select playlist dialog */}
       <Dialog open={!!addToPlaylistTrack} onOpenChange={() => setAddToPlaylistTrack(null)}>
         <DialogContent className="bg-card border-border/50 rounded-2xl">
           <DialogHeader>
