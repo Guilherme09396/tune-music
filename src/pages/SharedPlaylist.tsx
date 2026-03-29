@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { usePlaylistStore, Playlist } from "@/hooks/usePlaylistStore";
 import { PlayerProvider, usePlayer } from "@/contexts/PlayerContext";
+import PlayerBar from "@/components/PlayerBar";
 import { useAuth } from "@/contexts/AuthContext";
 import { Track, formatDuration } from "@/lib/api";
 import { Play, Pause, Save, Music, ArrowLeft, Loader2 } from "lucide-react";
@@ -111,7 +112,7 @@ function SharedContent() {
           )}
         </div>
 
-        <div className="space-y-1">
+      <div className="space-y-1 pb-28">
           {playlist?.tracks.map((track, i) => {
             const playing = isCurrentlyPlaying(track);
             return (
@@ -141,6 +142,7 @@ function SharedContent() {
           })}
         </div>
       </div>
+      <PlayerBar />
     </div>
   );
 }
