@@ -5,7 +5,7 @@ import PlaylistView from "@/components/PlaylistView";
 import PlayerBar from "@/components/PlayerBar";
 import HomeView from "@/components/HomeView";
 import HistoryView from "@/components/HistoryView";
-import StatsView from "@/components/StatsView";
+
 import { usePlaylistStore } from "@/hooks/usePlaylistStore";
 import { useOfflineStorage } from "@/hooks/useOfflineStorage";
 import { PlayerProvider, usePlayer } from "@/contexts/PlayerContext";
@@ -88,7 +88,7 @@ function AppContent() {
         {activeView === "home" && <HomeView onNavigate={handleViewChange} />}
         {activeView === "search" && <SearchView onAddToPlaylist={handleAddToPlaylist} />}
         {activeView === "history" && <HistoryView />}
-        {activeView === "stats" && <StatsView />}
+        
         {activePlaylist && (
           <PlaylistView
             playlist={activePlaylist}

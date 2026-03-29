@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, ListMusic, Plus, LogOut, Music2, Clock, Home, ChevronDown, ChevronRight, BarChart3 } from "lucide-react";
+import { Search, ListMusic, Plus, LogOut, Music2, Clock, Home, ChevronDown, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,6 @@ export default function Sidebar({ playlists, activeView, onViewChange, onCreateP
     { id: "home", icon: Home, label: "Início" },
     { id: "search", icon: Search, label: "Buscar" },
     { id: "history", icon: Clock, label: "Histórico" },
-    { id: "stats", icon: BarChart3, label: "Estatísticas" },
   ];
 
   return (
