@@ -61,8 +61,7 @@ function SharedContent() {
       <div className="flex h-screen flex-col items-center justify-center bg-background gap-4">
         <Music className="h-16 w-16 text-muted-foreground/30" />
         <h1 className="text-2xl font-bold text-foreground">Playlist não encontrada</h1>
-        <p className="text-muted-foreground">Este link pode estar expirado ou a playlist foi tornada privada</p>
-        <p className="text-muted-foreground">Caso esteja acessando sem estar logado, logue para que seja possível localizar a playlist</p>
+        <p className="text-muted-foreground">Este link pode estar expirado ou a playlist foi tornada privada.</p>
         <Button onClick={() => navigate("/")} variant="outline" className="rounded-full gap-2 mt-4">
           <ArrowLeft className="h-4 w-4" /> Voltar ao início
         </Button>
