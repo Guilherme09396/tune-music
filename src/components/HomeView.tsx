@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Play, Pause, Clock, Music, Sparkles } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Play, Pause, Clock, Music, Sparkles, Mic2, BarChart3, TrendingUp } from "lucide-react";
 import { Track, formatDuration, searchTracks } from "@/lib/api";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useListeningHistory } from "@/hooks/useListeningHistory";
@@ -10,9 +10,48 @@ interface HomeViewProps {
 }
 
 export default function HomeView({ onNavigate }: HomeViewProps) {
-  const { recentTracks, topArtists } = useListeningHistory();
+  const { history, recentTracks, topArtists } = useListeningHistory();
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
   const [recommendations, setRecommendations] = useState<Track[]>([]);
+
+  const currentYear = new Date().getFullYear();
+
+  // Filter history for current year only
+  const yearHistory = useMemo(() => {
+    return history.filter(e => new Date(e.playedAt).getFullYear() === currentYear);
+  }, [history, currentYear]);
+
+  const yearStats = useMemo(() => {
+    const totalSeconds = yearHistory.reduce((sum, e) => sum + (e.track.duration || 0), 0);
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    const totalHours = Math.floor(totalMinutes / 60);
+
+    const artistMap = new Map<string, { count: number; seconds: number; thumbnail: string }>();
+    yearHistory.forEach(e => {
+      const prev = artistMap.get(e.track.artist) || { count: 0, seconds: 0, thumbnail: "" };
+      artistMap.set(e.track.artist, {
+        count: prev.count + 1,
+        seconds: prev.seconds + (e.track.duration || 0),
+        thumbnail: e.track.thumbnail || prev.thumbnail,
+      });
+    });
+    const topArtists = Array.from(artistMap.entries())
+      .map(([name, data]) => ({ name, ...data, minutes: Math.floor(data.seconds / 60) }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    const trackMap = new Map<string, { track: Track; count: number }>();
+    yearHistory.forEach(e => {
+      const prev = trackMap.get(e.track.id);
+      if (prev) prev.count++;
+      else trackMap.set(e.track.id, { track: e.track, count: 1 });
+    });
+    const topTracks = Array.from(trackMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    return { totalMinutes, totalHours, topArtists, topTracks, uniqueArtists: artistMap.size, totalPlays: yearHistory.length };
+  }, [yearHistory]);
 
   useEffect(() => {
     const fetchRecs = async () => {
@@ -36,6 +75,14 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
   };
 
   const isCurrentlyPlaying = (track: Track) => currentTrack?.id === track.id && isPlaying;
+
+  const rankColors = [
+    "text-primary",
+    "text-primary/80",
+    "text-primary/60",
+    "text-muted-foreground",
+    "text-muted-foreground",
+  ];
 
   const TrackCard = ({ track, tracks }: { track: Track; tracks: Track[] }) => {
     const playing = isCurrentlyPlaying(track);
@@ -67,6 +114,99 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
           <p className="text-muted-foreground mt-1 text-sm sm:text-base">O que vamos ouvir hoje?</p>
         </motion.div>
 
+        {/* Year Stats Section */}
+        {yearHistory.length > 0 && (
+          <motion.section
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="mb-8 sm:mb-10"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+              <h2 className="text-base sm:text-lg font-bold text-foreground">Sua retrospectiva {currentYear}</h2>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              <div className="rounded-2xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 p-4 text-center">
+                <p className="text-2xl sm:text-3xl font-extrabold text-foreground tabular-nums">{yearStats.totalHours}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">horas ouvidas</p>
+              </div>
+              <div className="rounded-2xl bg-card border border-border/50 p-4 text-center">
+                <p className="text-2xl sm:text-3xl font-extrabold text-foreground tabular-nums">{yearStats.totalPlays}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">reproduções</p>
+              </div>
+              <div className="rounded-2xl bg-card border border-border/50 p-4 text-center">
+                <p className="text-2xl sm:text-3xl font-extrabold text-foreground tabular-nums">{yearStats.uniqueArtists}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">artistas</p>
+              </div>
+              <div className="rounded-2xl bg-card border border-border/50 p-4 text-center">
+                <p className="text-2xl sm:text-3xl font-extrabold text-foreground tabular-nums">{yearStats.totalMinutes.toLocaleString("pt-BR")}</p>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">minutos totais</p>
+              </div>
+            </div>
+
+            {/* Top Artists + Top Tracks side by side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Top Artists */}
+              {yearStats.topArtists.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Mic2 className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-bold text-foreground">Top Artistas</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {yearStats.topArtists.map((artist, i) => (
+                      <div
+                        key={artist.name}
+                        className="flex items-center gap-3 rounded-xl bg-card border border-border/30 p-2.5 sm:p-3 transition-colors hover:bg-muted/30"
+                      >
+                        <span className={`text-base sm:text-lg font-bold w-6 text-center ${rankColors[i]}`}>{i + 1}</span>
+                        <img src={artist.thumbnail} alt={artist.name} className="h-10 w-10 sm:h-12 sm:w-12 rounded-full object-cover ring-2 ring-border/50" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-foreground truncate">{artist.name}</p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground">
+                            {artist.count} {artist.count === 1 ? "reprodução" : "reproduções"} · {artist.minutes} min
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top Tracks */}
+              {yearStats.topTracks.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Music className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-bold text-foreground">Top Músicas</h3>
+                  </div>
+                  <div className="space-y-1">
+                    {yearStats.topTracks.map((item, i) => (
+                      <div
+                        key={item.track.id}
+                        className="flex items-center gap-3 rounded-xl p-2.5 sm:p-3 transition-colors hover:bg-muted/30 cursor-pointer"
+                        onClick={() => isCurrentlyPlaying(item.track) ? togglePlay() : playTrack(item.track, yearStats.topTracks.map(t => t.track))}
+                      >
+                        <span className={`text-base sm:text-lg font-bold w-6 text-center ${rankColors[Math.min(i, 4)]}`}>{i + 1}</span>
+                        <img src={item.track.thumbnail} alt={item.track.title} className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover shadow" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm font-semibold text-foreground truncate">{item.track.title}</p>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{item.track.artist}</p>
+                        </div>
+                        <span className="text-[10px] sm:text-xs text-muted-foreground tabular-nums">{item.count}x</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.section>
+        )}
+
+        {/* Recently Played */}
         {recentTracks.length > 0 && (
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-8 sm:mb-10">
             <div className="flex items-center justify-between mb-3 sm:mb-4">
@@ -100,6 +240,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
           </motion.section>
         )}
 
+        {/* Recommendations */}
         {recommendations.length > 0 && (
           <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="mb-10">
             <div className="flex items-center gap-2 mb-3 sm:mb-4">
@@ -114,6 +255,7 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
           </motion.section>
         )}
 
+        {/* Empty state */}
         {recentTracks.length === 0 && recommendations.length === 0 && (
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center justify-center py-16 px-4">
             <div className="relative mb-6">
