@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import Sidebar from "@/components/Sidebar";
 import SearchView from "@/components/SearchView";
 import PlaylistView from "@/components/PlaylistView";
@@ -30,12 +30,41 @@ function AppContent() {
   } = useOfflineStorage();
   const [addToPlaylistTrack, setAddToPlaylistTrack] = useState<Track | null>(null);
   const { addToHistory } = useListeningHistory();
-  const { currentTrack } = usePlayer();
+  const { currentTrack, currentTime } = usePlayer();
   const isMobile = useIsMobile();
+  const prevTrackRef = useRef<{ track: Track; listenedTime: number } | null>(null);
 
+  // Track actual listened time: save when track changes
   useEffect(() => {
-    if (currentTrack) addToHistory(currentTrack);
+    if (prevTrackRef.current && prevTrackRef.current.track.id !== currentTrack?.id) {
+      const { track, listenedTime } = prevTrackRef.current;
+      addToHistory(track, listenedTime);
+    }
+    if (currentTrack) {
+      prevTrackRef.current = { track: currentTrack, listenedTime: 0 };
+    } else {
+      prevTrackRef.current = null;
+    }
   }, [currentTrack?.id]);
+
+  // Update listened time continuously
+  useEffect(() => {
+    if (prevTrackRef.current && currentTrack && prevTrackRef.current.track.id === currentTrack.id) {
+      prevTrackRef.current.listenedTime = currentTime;
+    }
+  }, [currentTime, currentTrack?.id]);
+
+  // Save on page unload
+  useEffect(() => {
+    const handleUnload = () => {
+      if (prevTrackRef.current && prevTrackRef.current.listenedTime >= 5) {
+        const { track, listenedTime } = prevTrackRef.current;
+        addToHistory(track, listenedTime);
+      }
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, [addToHistory]);
 
   const handleViewChange = (view: string) => {
     setActiveView(view);

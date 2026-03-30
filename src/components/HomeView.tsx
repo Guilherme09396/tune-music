@@ -22,16 +22,17 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
   }, [history, currentYear]);
 
   const yearStats = useMemo(() => {
-    const totalSeconds = yearHistory.reduce((sum, e) => sum + (e.track.duration || 0), 0);
+    const totalSeconds = yearHistory.reduce((sum, e) => sum + (e.listenedSeconds || e.track.duration || 0), 0);
     const totalMinutes = Math.floor(totalSeconds / 60);
     const totalHours = Math.floor(totalMinutes / 60);
 
     const artistMap = new Map<string, { count: number; seconds: number; thumbnail: string }>();
     yearHistory.forEach(e => {
+      const listenedSec = e.listenedSeconds || e.track.duration || 0;
       const prev = artistMap.get(e.track.artist) || { count: 0, seconds: 0, thumbnail: "" };
       artistMap.set(e.track.artist, {
         count: prev.count + 1,
-        seconds: prev.seconds + (e.track.duration || 0),
+        seconds: prev.seconds + listenedSec,
         thumbnail: e.track.thumbnail || prev.thumbnail,
       });
     });
