@@ -11,24 +11,34 @@ serve(async (req) => {
   }
 
   const url = new URL(req.url);
-  const query = url.searchParams.get('q');
+  const artist = url.searchParams.get('artist');
+  const title = url.searchParams.get('title');
 
-  if (!query) {
-    return new Response(JSON.stringify({ error: 'Missing query parameter' }), {
+  if (!artist || !title) {
+    return new Response(JSON.stringify({ error: 'Missing artist or title' }), {
       status: 400,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
   try {
-    const res = await fetch(`https://lyrics.lewdhutao.my.eu.org/api/search?q=${encodeURIComponent(query)}`);
-    const data = await res.text();
-    
-    return new Response(data, {
-      status: res.status,
+    const res = await fetch(
+      `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`
+    );
+
+    if (!res.ok) {
+      return new Response(JSON.stringify({ error: 'Lyrics not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const data = await res.json();
+    return new Response(JSON.stringify({ lyrics: data.lyrics }), {
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch {
     return new Response(JSON.stringify({ error: 'Failed to fetch lyrics' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
