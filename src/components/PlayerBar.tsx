@@ -3,14 +3,19 @@ import { usePlayer } from "@/contexts/PlayerContext";
 import { formatDuration } from "@/lib/api";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download, ChevronUp, ChevronDown
+  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download, ChevronUp, ChevronDown, Music2
 } from "lucide-react";
 import { getDownloadUrl } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-export default function PlayerBar() {
+interface PlayerBarProps {
+  onToggleLyrics?: () => void;
+  lyricsOpen?: boolean;
+}
+
+export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps) {
   const {
     currentTrack, isPlaying, currentTime, duration, volume,
     togglePlay, seekTo, setVolume, nextTrack, prevTrack,
