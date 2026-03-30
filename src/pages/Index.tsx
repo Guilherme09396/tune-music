@@ -5,6 +5,7 @@ import PlaylistView from "@/components/PlaylistView";
 import PlayerBar from "@/components/PlayerBar";
 import HomeView from "@/components/HomeView";
 import HistoryView from "@/components/HistoryView";
+import LyricsPanel from "@/components/LyricsPanel";
 
 import { usePlaylistStore } from "@/hooks/usePlaylistStore";
 import { useOfflineStorage } from "@/hooks/useOfflineStorage";
@@ -32,6 +33,7 @@ function AppContent() {
   const { addToHistory } = useListeningHistory();
   const { currentTrack, currentTime } = usePlayer();
   const isMobile = useIsMobile();
+  const [lyricsOpen, setLyricsOpen] = useState(false);
   const prevTrackRef = useRef<{ track: Track; listenedTime: number } | null>(null);
 
   // Track actual listened time: save when track changes
@@ -133,7 +135,8 @@ function AppContent() {
         )}
       </main>
 
-      <PlayerBar />
+      <PlayerBar onToggleLyrics={() => setLyricsOpen(v => !v)} lyricsOpen={lyricsOpen} />
+      <LyricsPanel open={lyricsOpen} onClose={() => setLyricsOpen(false)} />
 
       <Dialog open={!!addToPlaylistTrack} onOpenChange={() => setAddToPlaylistTrack(null)}>
         <DialogContent className="bg-card border-border/50 rounded-2xl">
