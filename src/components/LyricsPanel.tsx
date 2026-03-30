@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { usePlayer } from "@/contexts/PlayerContext";
-import { fetchLyrics } from "@/lib/lyrics";
+import { fetchLyrics, SyncedLine } from "@/lib/lyrics";
 import { Music2, X, Loader2, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,26 +11,61 @@ interface LyricsPanelProps {
 }
 
 export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
-  const { currentTrack } = usePlayer();
+  const { currentTrack, currentTime } = usePlayer();
   const [lyrics, setLyrics] = useState<string | null>(null);
+  const [syncedLines, setSyncedLines] = useState<SyncedLine[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const activeLineRef = useRef<HTMLParagraphElement | null>(null);
 
   useEffect(() => {
     if (!currentTrack || !open) return;
+
+    let cancelled = false;
+
     setLoading(true);
     setError(false);
     setLyrics(null);
+    setSyncedLines(null);
 
-    fetchLyrics(currentTrack.title, currentTrack.artist).then(result => {
+    fetchLyrics(currentTrack.title, currentTrack.artist).then((result) => {
+      if (cancelled) return;
+
       if (result) {
         setLyrics(result.lyrics);
+        setSyncedLines(result.syncedLines ?? null);
       } else {
         setError(true);
       }
+
       setLoading(false);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [currentTrack?.id, open]);
+
+  // índice da linha ativa baseado no tempo atual
+  const activeIndex = useMemo(() => {
+    if (!syncedLines || currentTime == null) return -1;
+    let idx = 0;
+    for (let i = 0; i < syncedLines.length; i++) {
+      if (currentTime >= syncedLines[i].time) idx = i;
+      else break;
+    }
+    return idx;
+  }, [syncedLines, currentTime]);
+
+  // auto-scroll para a linha ativa
+  useEffect(() => {
+    if (activeLineRef.current) {
+      activeLineRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [activeIndex]);
 
   if (!open) return null;
 
@@ -48,7 +83,10 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
             <Music2 className="h-5 w-5 text-primary" />
             <h2 className="text-base font-bold text-foreground">Letra</h2>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -56,10 +94,18 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
         {/* Track info */}
         {currentTrack && (
           <div className="flex items-center gap-3 px-5 py-3 border-b border-border/20">
-            <img src={currentTrack.thumbnail} alt="" className="h-10 w-10 rounded-lg object-cover" />
+            <img
+              src={currentTrack.thumbnail}
+              alt=""
+              className="h-10 w-10 rounded-lg object-cover"
+            />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground truncate">{currentTrack.title}</p>
-              <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
+              <p className="text-sm font-semibold text-foreground truncate">
+                {currentTrack.title}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                {currentTrack.artist}
+              </p>
             </div>
           </div>
         )}
@@ -77,7 +123,9 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
             {error && !loading && (
               <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
                 <AlertCircle className="h-10 w-10 text-muted-foreground/50" />
-                <p className="text-sm font-medium text-foreground">Letra não encontrada</p>
+                <p className="text-sm font-medium text-foreground">
+                  Letra não encontrada
+                </p>
                 <p className="text-xs text-muted-foreground max-w-[240px]">
                   Não foi possível encontrar a letra desta música.
                 </p>
@@ -87,11 +135,45 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
             {!loading && !error && !currentTrack && (
               <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
                 <Music2 className="h-10 w-10 text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground">Toque uma música para ver a letra</p>
+                <p className="text-sm text-muted-foreground">
+                  Toque uma música para ver a letra
+                </p>
               </div>
             )}
 
-            {lyrics && !loading && (
+            {/* Letra sincronizada */}
+            {syncedLines && !loading && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-3"
+              >
+                {syncedLines.map((line, i) => {
+                  const isActive = i === activeIndex;
+                  const isPast = i < activeIndex;
+                  return (
+                    <p
+                      key={i}
+                      ref={isActive ? activeLineRef : null}
+                      className={`text-sm leading-relaxed transition-all duration-300 ${
+                        line.text === ""
+                          ? "h-3"
+                          : isActive
+                          ? "text-foreground font-semibold text-base scale-[1.02] origin-left"
+                          : isPast
+                          ? "text-muted-foreground/50"
+                          : "text-foreground/60"
+                      }`}
+                    >
+                      {line.text}
+                    </p>
+                  );
+                })}
+              </motion.div>
+            )}
+
+            {/* Letra simples (sem sincronia) */}
+            {lyrics && !syncedLines && !loading && (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}

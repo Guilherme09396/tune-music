@@ -1,49 +1,97 @@
+export interface SyncedLine {
+    time: number; // segundos
+    text: string;
+}
+
 export interface LyricsResult {
-  lyrics: string;
+    lyrics: string;
+    syncedLines?: SyncedLine[];
 }
 
-function buildTitleCandidates(title: string): string[] {
-  const normalized = title
-    .replace(/\s*[\(\[][^)\]]*[\)\]]/gi, "")
-    .replace(/\s*\|.*$/, "")
-    .replace(/\s*(?:ao vivo|live|official|clipe|clip|video|audio|visualizer|lyrics?)\b.*$/gi, "")
-    .trim();
-
-  const pieces = normalized
-    .split(/\s+-\s+/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  const candidates = [
-    normalized,
-    pieces[pieces.length - 1],
-    pieces.find((part) => part.length > 2 && part.length < 40),
-    normalized.replace(/\s*#\d+\b/gi, "").trim(),
-  ].filter((value, index, arr): value is string => !!value && arr.indexOf(value) === index);
-
-  return candidates.length > 0 ? candidates : [title.trim()];
+// Parseia "[mm:ss.xx] texto" → { time, text }[]
+export function parseSyncedLyrics(raw: string): SyncedLine[] {
+    return raw
+        .split("\n")
+        .map((line) => {
+            const match = line.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/);
+            if (!match) return null;
+            const minutes = parseInt(match[1]);
+            const seconds = parseInt(match[2]);
+            const ms = parseInt(match[3].padEnd(3, "0"));
+            const time = minutes * 60 + seconds + ms / 1000;
+            return { time, text: match[4].trim() };
+        })
+        .filter(Boolean) as SyncedLine[];
 }
 
-export async function fetchLyrics(title: string, artist: string): Promise<LyricsResult | null> {
-  try {
-    const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-    const titleCandidates = buildTitleCandidates(title);
+async function fetchFromLrclib(
+    title: string,
+    artist: string,
+): Promise<LyricsResult | null> {
+    try {
+        const params = new URLSearchParams({
+            track_name: title,
+            artist_name: artist,
+        });
+        const res = await fetch(`https://lrclib.net/api/search?${params}`);
+        if (!res.ok) return null;
 
-    for (const candidate of titleCandidates) {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/lyrics-proxy?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(candidate)}`,
-      );
+        const data = await res.json();
+        if (!data || data.length === 0) return null;
 
-      if (!response.ok) continue;
+        const match = data.find(
+            (item: any) => item.plainLyrics || item.syncedLyrics,
+        );
+        if (!match) return null;
 
-      const data = await response.json();
-      if (data?.lyrics) {
-        return { lyrics: data.lyrics };
-      }
+        // se tiver letra sincronizada, usa ela
+        if (match.syncedLyrics) {
+            const syncedLines = parseSyncedLyrics(match.syncedLyrics);
+            const lyrics =
+                match.plainLyrics || syncedLines.map((l) => l.text).join("\n");
+            return { lyrics, syncedLines };
+        }
+
+        return { lyrics: match.plainLyrics };
+    } catch {
+        return null;
     }
+}
 
-    return null;
-  } catch {
-    return null;
-  }
+async function fetchFromLyricsOvh(
+    title: string,
+    artist: string,
+): Promise<LyricsResult | null> {
+    try {
+        const res = await fetch(
+            `https://api.lyrics.ovh/v1/${encodeURIComponent(artist)}/${encodeURIComponent(title)}`,
+        );
+        if (!res.ok) return null;
+        const data = await res.json();
+        if (!data.lyrics) return null;
+        return { lyrics: data.lyrics };
+    } catch {
+        return null;
+    }
+}
+
+export async function fetchLyrics(
+    title: string,
+    artist: string,
+): Promise<LyricsResult | null> {
+    try {
+        console.log("🎵 Buscando letra:", artist, "-", title);
+
+        let result = await fetchFromLrclib(title, artist);
+
+        if (!result) {
+            console.log("⏩ Fallback: lyrics.ovh");
+            result = await fetchFromLyricsOvh(title, artist);
+        }
+
+        return result;
+    } catch (err) {
+        console.error("Erro ao buscar letra:", err);
+        return null;
+    }
 }

@@ -1,62 +1,98 @@
+// supabase/functions/lyrics-proxy/index.ts
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+function normalize(str: string) {
+    return str
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // remove acento
+        .replace(/[^a-z0-9\s]/g, "")
+        .trim()
+        .replace(/\s+/g, "-");
+}
+
+async function fetchVagalume(artist: string, title: string) {
+    try {
+        const artistSlug = normalize(artist);
+        const titleSlug = normalize(title);
+
+        const url = `https://www.vagalume.com.br/${artistSlug}/${titleSlug}.html`;
+
+        console.log("🔎 Vagalume URL:", url);
+
+        const res = await fetch(url);
+
+        if (!res.ok) return null;
+
+        const html = await res.text();
+
+        // 🔥 extrai letra da página
+        const match = html.match(/<div id="lyrics">([\s\S]*?)<\/div>/);
+
+        if (!match) return null;
+
+        let lyrics = match[1]
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<\/?[^>]+(>|$)/g, "")
+            .trim();
+
+        if (!lyrics) return null;
+
+        return lyrics;
+    } catch (err) {
+        console.error("Erro vagalume:", err);
+        return null;
+    }
+}
+
+async function fetchLyricsOvh(artist: string, title: string) {
+    try {
+        const res = await fetch(
+            `https://api.lyrics.ovh/v1/${encodeURIComponent(
+                artist,
+            )}/${encodeURIComponent(title)}`,
+        );
+
+        if (!res.ok) return null;
+
+        const data = await res.json();
+
+        return data?.lyrics || null;
+    } catch {
+        return null;
+    }
+}
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+    try {
+        const { searchParams } = new URL(req.url);
 
-  const url = new URL(req.url);
-  const artist = url.searchParams.get("artist")?.trim();
-  const title = url.searchParams.get("title")?.trim();
+        const artist = searchParams.get("artist") || "";
+        const title = searchParams.get("title") || "";
 
-  if (!artist || !title) {
-    return new Response(JSON.stringify({ lyrics: null, error: "Missing artist or title" }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
+        console.log("🎵 Request:", { artist, title });
 
-  try {
-    const candidates = [
-      { artist, title },
-      { artist: artist.split(",")[0].trim(), title },
-      { artist: artist.split("&")[0].trim(), title },
-    ].filter((candidate, index, arr) => {
-      if (!candidate.artist || !candidate.title) return false;
-      return arr.findIndex(
-        (item) => item.artist.toLowerCase() === candidate.artist.toLowerCase() && item.title.toLowerCase() === candidate.title.toLowerCase(),
-      ) === index;
-    });
+        // 🔥 1. tenta Vagalume (BR)
+        let lyrics = await fetchVagalume(artist, title);
 
-    for (const candidate of candidates) {
-      const response = await fetch(
-        `https://api.lyrics.ovh/v1/${encodeURIComponent(candidate.artist)}/${encodeURIComponent(candidate.title)}`,
-      );
+        // 🔥 2. fallback gringo
+        if (!lyrics) {
+            lyrics = await fetchLyricsOvh(artist, title);
+        }
 
-      if (response.ok) {
-        const data = await response.json();
-        return new Response(JSON.stringify({ lyrics: data.lyrics ?? null, error: null }), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        if (!lyrics) {
+            return new Response(JSON.stringify({ error: "Lyrics not found" }), {
+                status: 404,
+            });
+        }
+
+        return new Response(JSON.stringify({ lyrics }), {
+            headers: { "Content-Type": "application/json" },
         });
-      }
-
-      await response.text();
+    } catch (err) {
+        return new Response(JSON.stringify({ error: "Internal error" }), {
+            status: 500,
+        });
     }
-
-    return new Response(JSON.stringify({ lyrics: null, error: "Lyrics not found" }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch {
-    return new Response(JSON.stringify({ lyrics: null, error: "Failed to fetch lyrics" }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
 });
