@@ -1,0 +1,1 @@
+ALTER TABLE public.listening_history ADD COLUMN listened_seconds numeric NOT NULL DEFAULT 0;
