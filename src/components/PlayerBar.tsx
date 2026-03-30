@@ -3,14 +3,19 @@ import { usePlayer } from "@/contexts/PlayerContext";
 import { formatDuration } from "@/lib/api";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download, ChevronUp, ChevronDown
+  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download, ChevronUp, ChevronDown, Music2
 } from "lucide-react";
 import { getDownloadUrl } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-export default function PlayerBar() {
+interface PlayerBarProps {
+  onToggleLyrics?: () => void;
+  lyricsOpen?: boolean;
+}
+
+export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps) {
   const {
     currentTrack, isPlaying, currentTime, duration, volume,
     togglePlay, seekTo, setVolume, nextTrack, prevTrack,
@@ -86,9 +91,16 @@ export default function PlayerBar() {
             </button>
           </div>
 
-          <button onClick={handleDownload} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary mt-2">
-            <Download className="h-4 w-4" /> Baixar
-          </button>
+          <div className="flex items-center gap-4 mt-2">
+            <button onClick={handleDownload} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary">
+              <Download className="h-4 w-4" /> Baixar
+            </button>
+            {onToggleLyrics && (
+              <button onClick={onToggleLyrics} className={`flex items-center gap-2 text-sm ${lyricsOpen ? "text-primary" : "text-muted-foreground hover:text-primary"}`}>
+                <Music2 className="h-4 w-4" /> Letra
+              </button>
+            )}
+          </div>
         </div>
       </motion.div>
     );
@@ -177,7 +189,12 @@ export default function PlayerBar() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 w-[160px] justify-end">
+          <div className="flex items-center gap-2 w-[200px] justify-end">
+            {onToggleLyrics && (
+              <button onClick={onToggleLyrics} className={`p-1.5 rounded-lg transition-all ${lyricsOpen ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"}`} title="Letra">
+                <Music2 className="h-4 w-4" />
+              </button>
+            )}
             <button onClick={() => setVolume(volume === 0 ? 0.7 : 0)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors">
               <VolumeIcon className="h-4 w-4" />
             </button>

@@ -19,6 +19,7 @@ export type Database = {
           artist: string
           duration: number
           id: string
+          listened_seconds: number
           played_at: string
           thumbnail: string
           title: string
@@ -30,6 +31,7 @@ export type Database = {
           artist: string
           duration?: number
           id?: string
+          listened_seconds?: number
           played_at?: string
           thumbnail?: string
           title: string
@@ -41,6 +43,7 @@ export type Database = {
           artist?: string
           duration?: number
           id?: string
+          listened_seconds?: number
           played_at?: string
           thumbnail?: string
           title?: string
