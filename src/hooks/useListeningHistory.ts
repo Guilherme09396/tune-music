@@ -6,6 +6,7 @@ import { Track } from "@/lib/api";
 export interface HistoryEntry {
   track: Track;
   playedAt: number;
+  listenedSeconds: number;
 }
 
 const MAX_HISTORY = 50;
@@ -35,13 +36,16 @@ export function useListeningHistory() {
         url: d.url,
       },
       playedAt: new Date(d.played_at).getTime(),
+      listenedSeconds: Number((d as any).listened_seconds) || 0,
     })));
   }, [user]);
 
   useEffect(() => { fetchHistory(); }, [fetchHistory]);
 
-  const addToHistory = useCallback(async (track: Track) => {
+  const addToHistory = useCallback(async (track: Track, listenedSeconds: number = 0) => {
     if (!user) return;
+    // Only save if listened for at least 5 seconds
+    if (listenedSeconds < 5) return;
 
     // Delete previous entry for same track to avoid duplicates
     await supabase
@@ -60,11 +64,12 @@ export function useListeningHistory() {
       thumbnail: track.thumbnail,
       url: track.url,
       played_at: now,
-    });
+      listened_seconds: Math.floor(listenedSeconds),
+    } as any);
 
     setHistory(prev => {
       const filtered = prev.filter(e => e.track.id !== track.id);
-      return [{ track, playedAt: Date.now() }, ...filtered].slice(0, MAX_HISTORY);
+      return [{ track, playedAt: Date.now(), listenedSeconds: Math.floor(listenedSeconds) }, ...filtered].slice(0, MAX_HISTORY);
     });
   }, [user]);
 
