@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from "react";
-import { Track, getStreamUrl } from "@/lib/api";
+import { Track, getStreamUrl, markServerFailed } from "@/lib/api";
 
 interface PlayerState {
   currentTrack: Track | null;
@@ -37,6 +37,7 @@ export function usePlayer() {
 
 export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const audioRef = useRef<HTMLAudioElement>(new Audio());
+  const retryCountRef = useRef(0);
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
     queue: [],
@@ -59,7 +60,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
     const onTimeUpdate = () => setState(s => ({ ...s, currentTime: audio.currentTime }));
     const onDurationChange = () => setState(s => ({ ...s, duration: audio.duration || 0 }));
     const onEnded = () => {
-      // Handle next track
       setState(prev => {
         const { queue, queueIndex, repeatMode, isShuffle } = prev;
 
@@ -86,6 +86,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
         const nextTrack = queue[nextIndex];
         if (nextTrack) {
+          retryCountRef.current = 0;
           audio.src = getStreamUrl(nextTrack.url);
           audio.play().catch(() => {});
           return { ...prev, currentTrack: nextTrack, queueIndex: nextIndex, isPlaying: true, currentTime: 0 };
@@ -94,11 +95,27 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
         return { ...prev, isPlaying: false };
       });
     };
+
     const onPlay = () => setState(s => ({ ...s, isPlaying: true }));
     const onPause = () => setState(s => ({ ...s, isPlaying: false }));
+
     const onError = () => {
       console.error("Audio playback error");
-      setState(s => ({ ...s, isPlaying: false }));
+      // tenta fallback para próximo servidor (máx 1 tentativa por faixa)
+      if (retryCountRef.current < 1) {
+        retryCountRef.current += 1;
+        markServerFailed();
+        setState(prev => {
+          if (prev.currentTrack) {
+            audio.src = getStreamUrl(prev.currentTrack.url);
+            audio.play().catch(() => {});
+            return { ...prev, isPlaying: true };
+          }
+          return { ...prev, isPlaying: false };
+        });
+      } else {
+        setState(s => ({ ...s, isPlaying: false }));
+      }
     };
 
     audio.addEventListener("timeupdate", onTimeUpdate);
@@ -121,6 +138,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
     const q = newQueue || [track];
     const idx = newQueue ? newQueue.findIndex(t => t.id === track.id) : 0;
+    retryCountRef.current = 0;
     audio.src = getStreamUrl(track.url);
     audio.play().catch(() => {});
     setState(s => ({
@@ -166,6 +184,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       const next = queue[nextIndex];
       if (next) {
+        retryCountRef.current = 0;
         audio.src = getStreamUrl(next.url);
         audio.play().catch(() => {});
         return { ...prev, currentTrack: next, queueIndex: nextIndex, isPlaying: true, currentTime: 0 };
@@ -188,6 +207,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       const prevT = queue[prevIndex];
       if (prevT) {
+        retryCountRef.current = 0;
         audio.src = getStreamUrl(prevT.url);
         audio.play().catch(() => {});
         return { ...prev, currentTrack: prevT, queueIndex: prevIndex, isPlaying: true, currentTime: 0 };

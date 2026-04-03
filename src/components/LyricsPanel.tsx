@@ -46,7 +46,6 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
     };
   }, [currentTrack?.id, open]);
 
-  // índice da linha ativa baseado no tempo atual
   const activeIndex = useMemo(() => {
     if (!syncedLines || currentTime == null) return -1;
     let idx = 0;
@@ -57,13 +56,9 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
     return idx;
   }, [syncedLines, currentTime]);
 
-  // auto-scroll para a linha ativa
   useEffect(() => {
     if (activeLineRef.current) {
-      activeLineRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
+      activeLineRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [activeIndex]);
 
@@ -77,7 +72,6 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
         exit={{ opacity: 0, x: 20 }}
         className="fixed right-0 top-0 bottom-0 z-40 w-full sm:w-[380px] lg:w-[420px] border-l border-border/50 bg-background/95 backdrop-blur-xl flex flex-col"
       >
-        {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border/30">
           <div className="flex items-center gap-2.5">
             <Music2 className="h-5 w-5 text-primary" />
@@ -91,26 +85,16 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
           </button>
         </div>
 
-        {/* Track info */}
         {currentTrack && (
           <div className="flex items-center gap-3 px-5 py-3 border-b border-border/20">
-            <img
-              src={currentTrack.thumbnail}
-              alt=""
-              className="h-10 w-10 rounded-lg object-cover"
-            />
+            <img src={currentTrack.thumbnail} alt="" className="h-10 w-10 rounded-lg object-cover" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground truncate">
-                {currentTrack.title}
-              </p>
-              <p className="text-xs text-muted-foreground truncate">
-                {currentTrack.artist}
-              </p>
+              <p className="text-sm font-semibold text-foreground truncate">{currentTrack.title}</p>
+              <p className="text-xs text-muted-foreground truncate">{currentTrack.artist}</p>
             </div>
           </div>
         )}
 
-        {/* Content */}
         <ScrollArea className="flex-1">
           <div className="px-5 py-6">
             {loading && (
@@ -123,9 +107,7 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
             {error && !loading && (
               <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
                 <AlertCircle className="h-10 w-10 text-muted-foreground/50" />
-                <p className="text-sm font-medium text-foreground">
-                  Letra não encontrada
-                </p>
+                <p className="text-sm font-medium text-foreground">Letra não encontrada</p>
                 <p className="text-xs text-muted-foreground max-w-[240px]">
                   Não foi possível encontrar a letra desta música.
                 </p>
@@ -135,19 +117,12 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
             {!loading && !error && !currentTrack && (
               <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
                 <Music2 className="h-10 w-10 text-muted-foreground/50" />
-                <p className="text-sm text-muted-foreground">
-                  Toque uma música para ver a letra
-                </p>
+                <p className="text-sm text-muted-foreground">Toque uma música para ver a letra</p>
               </div>
             )}
 
-            {/* Letra sincronizada */}
             {syncedLines && !loading && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-3"
-              >
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
                 {syncedLines.map((line, i) => {
                   const isActive = i === activeIndex;
                   const isPast = i < activeIndex;
@@ -172,13 +147,8 @@ export default function LyricsPanel({ open, onClose }: LyricsPanelProps) {
               </motion.div>
             )}
 
-            {/* Letra simples (sem sincronia) */}
             {lyrics && !syncedLines && !loading && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-1"
-              >
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
                 {lyrics.split("\n").map((line, i) => (
                   <p
                     key={i}
