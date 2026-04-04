@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, Play, Plus, Loader2, Download, Pause } from "lucide-react";
+import { useState, useRef } from "react";
+import { Search, Play, Plus, Loader2, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { searchTracks, Track, formatDuration, getDownloadUrl } from "@/lib/api";
 import { usePlayer } from "@/contexts/PlayerContext";
@@ -17,21 +17,28 @@ export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const totalPages = Math.ceil(results.length / PAGE_SIZE);
+  const paginated = results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
-    setLoading(true);
-    setPage(1);
-    try {
-      const tracks = await searchTracks(query.trim());
-      setResults(tracks);
-      if (tracks.length === 0) toast.info("Nenhuma música encontrada");
-    } catch {
-      toast.error("Erro ao buscar músicas");
-    } finally {
-      setLoading(false);
-    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      setPage(1);
+      try {
+        const tracks = await searchTracks(query.trim());
+        setResults(tracks);
+        if (tracks.length === 0) toast.info("Nenhuma música encontrada");
+      } catch {
+        toast.error("Erro ao buscar músicas");
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
   };
 
   const handleDownload = (track: Track) => {
@@ -80,8 +87,10 @@ export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
             <p className="text-sm text-muted-foreground mb-4">
               {results.length} resultado{results.length !== 1 ? "s" : ""} encontrado{results.length !== 1 ? "s" : ""}
             </p>
+
             <div className="space-y-1">
-              {results.map((track, i) => {
+              {paginated.map((track, i) => {
+                const globalIndex = (page - 1) * PAGE_SIZE + i;
                 const playing = isCurrentlyPlaying(track);
                 return (
                   <motion.div
@@ -99,7 +108,7 @@ export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
                         </div>
                       ) : (
                         <>
-                          <span className="text-xs sm:text-sm text-muted-foreground group-hover:hidden tabular-nums">{i + 1}</span>
+                          <span className="text-xs sm:text-sm text-muted-foreground group-hover:hidden tabular-nums">{globalIndex + 1}</span>
                           <Play className="h-4 w-4 text-foreground hidden group-hover:block" />
                         </>
                       )}
@@ -128,6 +137,29 @@ export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
                 );
               })}
             </div>
+
+            {/* Paginação */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-3 mt-6">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="p-2 rounded-lg hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="text-sm text-muted-foreground">
+                  {page} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="p-2 rounded-lg hover:bg-muted/50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
 
