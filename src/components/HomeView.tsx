@@ -47,9 +47,10 @@ export default function HomeView({ onNavigate }: HomeViewProps) {
       if (prev) prev.count++;
       else trackMap.set(e.track.id, { track: e.track, count: 1 });
     });
-    const topTracks = Array.from(trackMap.values())
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
+   const topTracks = [...yearHistory]
+    .sort((a, b) => (b.playCount || 1) - (a.playCount || 1))
+    .slice(0, 5)
+    .map(e => ({ track: e.track, count: e.playCount || 1 }));
 
     return { totalMinutes, totalHours, topArtists, topTracks, uniqueArtists: artistMap.size, totalPlays: yearHistory.length };
   }, [yearHistory]);

@@ -15,11 +15,14 @@ export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
   const [results, setResults] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
     setLoading(true);
+    setPage(1);
     try {
       const tracks = await searchTracks(query.trim());
       setResults(tracks);

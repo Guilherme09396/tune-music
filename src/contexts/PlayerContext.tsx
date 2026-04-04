@@ -35,9 +35,17 @@ export function usePlayer() {
   return ctx;
 }
 
-export function PlayerProvider({ children }: { children: React.ReactNode }) {
+interface PlayerProviderProps {
+  children: React.ReactNode;
+  onTrackListened?: (track: Track, listenedSeconds: number) => void;
+}
+
+export function PlayerProvider({ children, onTrackListened }: PlayerProviderProps) {
   const audioRef = useRef<HTMLAudioElement>(new Audio());
   const retryCountRef = useRef(0);
+  const listenStartRef = useRef<number | null>(null);
+  const currentTrackRef = useRef<Track | null>(null);
+
   const [state, setState] = useState<PlayerState>({
     currentTrack: null,
     queue: [],
@@ -52,14 +60,41 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
   const audio = audioRef.current;
 
+  // Salva referência da track atual para usar nos event listeners
+  useEffect(() => {
+    currentTrackRef.current = state.currentTrack;
+  }, [state.currentTrack]);
+
   useEffect(() => {
     audio.volume = state.volume;
   }, [state.volume, audio]);
 
+  // Função para registrar o tempo ouvido e chamar callback
+  const saveListenedTime = useCallback(() => {
+    if (listenStartRef.current !== null && currentTrackRef.current && onTrackListened) {
+      const listenedSeconds = (Date.now() - listenStartRef.current) / 1000;
+      onTrackListened(currentTrackRef.current, listenedSeconds);
+      listenStartRef.current = null;
+    }
+  }, [onTrackListened]);
+
   useEffect(() => {
     const onTimeUpdate = () => setState(s => ({ ...s, currentTime: audio.currentTime }));
     const onDurationChange = () => setState(s => ({ ...s, duration: audio.duration || 0 }));
+
+    const onPlay = () => {
+      setState(s => ({ ...s, isPlaying: true }));
+      listenStartRef.current = Date.now();
+    };
+
+    const onPause = () => {
+      setState(s => ({ ...s, isPlaying: false }));
+      saveListenedTime();
+    };
+
     const onEnded = () => {
+      saveListenedTime();
+
       setState(prev => {
         const { queue, queueIndex, repeatMode, isShuffle } = prev;
 
@@ -96,12 +131,8 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       });
     };
 
-    const onPlay = () => setState(s => ({ ...s, isPlaying: true }));
-    const onPause = () => setState(s => ({ ...s, isPlaying: false }));
-
     const onError = () => {
       console.error("Audio playback error");
-      // tenta fallback para próximo servidor (máx 1 tentativa por faixa)
       if (retryCountRef.current < 1) {
         retryCountRef.current += 1;
         markServerFailed();
@@ -133,9 +164,12 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("error", onError);
     };
-  }, [audio]);
+  }, [audio, saveListenedTime]);
 
   const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
+    // Salva tempo da track anterior antes de trocar
+    saveListenedTime();
+
     const q = newQueue || [track];
     const idx = newQueue ? newQueue.findIndex(t => t.id === track.id) : 0;
     retryCountRef.current = 0;
@@ -149,7 +183,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       isPlaying: true,
       currentTime: 0,
     }));
-  }, [audio]);
+  }, [audio, saveListenedTime]);
 
   const togglePlay = useCallback(() => {
     if (!state.currentTrack) return;
@@ -170,6 +204,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
   }, [audio]);
 
   const nextTrack = useCallback(() => {
+    saveListenedTime();
     setState(prev => {
       const { queue, queueIndex, isShuffle, repeatMode } = prev;
       let nextIndex: number;
@@ -191,13 +226,14 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       return prev;
     });
-  }, [audio]);
+  }, [audio, saveListenedTime]);
 
   const prevTrack = useCallback(() => {
     if (audio.currentTime > 3) {
       audio.currentTime = 0;
       return;
     }
+    saveListenedTime();
     setState(prev => {
       const { queue, queueIndex } = prev;
       const prevIndex = queueIndex - 1;
@@ -214,7 +250,7 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
       }
       return prev;
     });
-  }, [audio]);
+  }, [audio, saveListenedTime]);
 
   const toggleShuffle = useCallback(() => {
     setState(s => ({ ...s, isShuffle: !s.isShuffle }));
