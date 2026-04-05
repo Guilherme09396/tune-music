@@ -24,6 +24,26 @@ export function markServerFailed(): void {
     );
 }
 
+/** Retorna o número total de servidores disponíveis */
+export function getServerCount(): number {
+    return ALL_SERVERS.length;
+}
+
+// Fetch com timeout
+async function fetchWithTimeout(
+    url: string,
+    options: RequestInit,
+    timeoutMs = 5000,
+): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
 // Tenta cada servidor em sequência para chamadas fetch
 async function tryEachServer<T>(fn: (base: string) => Promise<T>): Promise<T> {
     let lastError: unknown;
@@ -31,7 +51,6 @@ async function tryEachServer<T>(fn: (base: string) => Promise<T>): Promise<T> {
         const serverIndex = (activeIndex + i) % ALL_SERVERS.length;
         try {
             const result = await fn(ALL_SERVERS[serverIndex]);
-            // se funcionou e não é o ativo atual, atualiza
             if (serverIndex !== activeIndex) {
                 activeIndex = serverIndex;
                 console.info(`✅ Alternado para servidor ${activeIndex}`);
@@ -39,7 +58,7 @@ async function tryEachServer<T>(fn: (base: string) => Promise<T>): Promise<T> {
             return result;
         } catch (err) {
             console.warn(
-                `⚠️ Servidor ${serverIndex} falhou na chamada, tentando próximo...`,
+                `⚠️ Servidor ${serverIndex} falhou, tentando próximo...`,
             );
             lastError = err;
         }
@@ -64,7 +83,7 @@ export interface Track {
 // =======================
 export async function searchTracks(query: string): Promise<Track[]> {
     return tryEachServer(async (base) => {
-        const res = await fetch(`${base}/search`, {
+        const res = await fetchWithTimeout(`${base}/search`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ query }),
@@ -76,7 +95,7 @@ export async function searchTracks(query: string): Promise<Track[]> {
 
 export async function getTrackInfo(url: string): Promise<Track> {
     return tryEachServer(async (base) => {
-        const res = await fetch(`${base}/info`, {
+        const res = await fetchWithTimeout(`${base}/info`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ url }),

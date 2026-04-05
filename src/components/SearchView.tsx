@@ -1,28 +1,24 @@
 import { useState, useRef } from "react";
 import { Search, Play, Plus, Loader2, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { searchTracks, Track, formatDuration, getDownloadUrl } from "@/lib/api";
+import { searchTracks, formatDuration, getDownloadUrl } from "@/lib/api";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 
-interface SearchViewProps {
-  onAddToPlaylist?: (track: Track) => void;
-}
-
-export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
+export default function SearchView({ onAddToPlaylist }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Track[]>([]);
+  const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debounceRef = useRef(null);
 
   const totalPages = Math.ceil(results.length / PAGE_SIZE);
   const paginated = results.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
     if (!query.trim()) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -34,14 +30,14 @@ export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
         setResults(tracks);
         if (tracks.length === 0) toast.info("Nenhuma música encontrada");
       } catch {
-        toast.error("Erro ao buscar músicas");
+        toast.error("Erro ao buscar músicas. Todos os servidores falharam.");
       } finally {
         setLoading(false);
       }
     }, 400);
   };
 
-  const handleDownload = (track: Track) => {
+  const handleDownload = (track) => {
     const a = document.createElement("a");
     a.href = getDownloadUrl(track.url, track.title);
     a.download = `${track.title}.mp3`;
@@ -49,7 +45,7 @@ export default function SearchView({ onAddToPlaylist }: SearchViewProps) {
     toast.success(`Baixando "${track.title}"...`);
   };
 
-  const isCurrentlyPlaying = (track: Track) =>
+  const isCurrentlyPlaying = (track) =>
     currentTrack?.id === track.id && isPlaying;
 
   return (

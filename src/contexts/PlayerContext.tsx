@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from "react";
-import { Track, getStreamUrl, markServerFailed } from "@/lib/api";
+import { Track, getStreamUrl, markServerFailed, getServerCount } from "@/lib/api";
 
 interface PlayerState {
   currentTrack: Track | null;
@@ -42,6 +42,7 @@ interface PlayerProviderProps {
 
 export function PlayerProvider({ children, onTrackListened }: PlayerProviderProps) {
   const audioRef = useRef<HTMLAudioElement>(new Audio());
+  // Conta quantos servidores já tentamos para a track atual
   const retryCountRef = useRef(0);
   const listenStartRef = useRef<number | null>(null);
   const currentTrackRef = useRef<Track | null>(null);
@@ -132,19 +133,25 @@ export function PlayerProvider({ children, onTrackListened }: PlayerProviderProp
     };
 
     const onError = () => {
-      console.error("Audio playback error");
-      if (retryCountRef.current < 1) {
+      const maxRetries = getServerCount() - 1; // tenta todos os outros servidores
+      console.error(`Audio playback error (tentativa ${retryCountRef.current + 1}/${maxRetries + 1})`);
+
+      if (retryCountRef.current < maxRetries) {
         retryCountRef.current += 1;
-        markServerFailed();
+        markServerFailed(); // alterna para o próximo servidor
         setState(prev => {
           if (prev.currentTrack) {
-            audio.src = getStreamUrl(prev.currentTrack.url);
+            const newUrl = getStreamUrl(prev.currentTrack.url);
+            console.info(`🔄 Tentando stream no novo servidor: ${newUrl}`);
+            audio.src = newUrl;
             audio.play().catch(() => {});
             return { ...prev, isPlaying: true };
           }
           return { ...prev, isPlaying: false };
         });
       } else {
+        console.error("❌ Todos os servidores falharam para reprodução");
+        retryCountRef.current = 0;
         setState(s => ({ ...s, isPlaying: false }));
       }
     };
