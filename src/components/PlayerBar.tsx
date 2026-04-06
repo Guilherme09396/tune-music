@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { formatDuration } from "@/lib/api";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download, ChevronUp, ChevronDown, Music2
+  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Volume1, Download, ChevronDown, Music2
 } from "lucide-react";
 import { getDownloadUrl } from "@/lib/api";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,9 +13,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 interface PlayerBarProps {
   onToggleLyrics?: () => void;
   lyricsOpen?: boolean;
+  getOfflineThumbnailUrl?: (trackId: string) => Promise<string | null>;
 }
 
-export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps) {
+export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbnailUrl }: PlayerBarProps) {
   const {
     currentTrack, isPlaying, currentTime, duration, volume,
     togglePlay, seekTo, setVolume, nextTrack, prevTrack,
@@ -23,6 +24,19 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps
   } = usePlayer();
   const isMobile = useIsMobile();
   const [expanded, setExpanded] = useState(false);
+  const [thumbnailSrc, setThumbnailSrc] = useState<string>("");
+
+  // Resolve capa offline quando necessário
+  useEffect(() => {
+    if (!currentTrack) return;
+    if (!navigator.onLine && getOfflineThumbnailUrl) {
+      getOfflineThumbnailUrl(currentTrack.id).then(url => {
+        setThumbnailSrc(url || currentTrack.thumbnail);
+      });
+    } else {
+      setThumbnailSrc(currentTrack.thumbnail);
+    }
+  }, [currentTrack?.id, currentTrack?.thumbnail, getOfflineThumbnailUrl]);
 
   if (!currentTrack) return null;
 
@@ -53,7 +67,7 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps
 
         <div className="flex-1 flex flex-col items-center justify-center gap-6">
           <img
-            src={currentTrack.thumbnail}
+            src={thumbnailSrc}
             alt={currentTrack.title}
             className={`w-64 h-64 rounded-2xl object-cover shadow-2xl ${isPlaying ? "animate-pulse-glow" : ""}`}
           />
@@ -62,7 +76,6 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps
             <p className="text-sm text-muted-foreground mt-1">{currentTrack.artist}</p>
           </div>
 
-          {/* Progress */}
           <div className="w-full px-2">
             <input
               type="range" min={0} max={duration || 100} value={currentTime}
@@ -76,7 +89,6 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps
             </div>
           </div>
 
-          {/* Controls */}
           <div className="flex items-center gap-6">
             <button onClick={toggleShuffle} className={`p-2 rounded-lg ${isShuffle ? "text-primary" : "text-muted-foreground"}`}>
               <Shuffle className="h-5 w-5" />
@@ -114,7 +126,7 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps
           <div className="h-full bg-primary" style={{ width: `${progress}%` }} />
         </div>
         <div className="flex items-center gap-3 px-3 py-2" onClick={() => setExpanded(true)}>
-          <img src={currentTrack.thumbnail} alt="" className="h-10 w-10 rounded-lg object-cover" />
+          <img src={thumbnailSrc} alt="" className="h-10 w-10 rounded-lg object-cover" />
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold truncate text-foreground">{currentTrack.title}</p>
             <p className="text-[10px] text-muted-foreground truncate">{currentTrack.artist}</p>
@@ -130,7 +142,7 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps
     );
   }
 
-  // Desktop player (unchanged)
+  // Desktop player
   return (
     <AnimatePresence>
       <motion.div
@@ -156,7 +168,7 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen }: PlayerBarProps
 
         <div className="mx-auto flex h-20 max-w-screen-2xl items-center gap-4 px-4">
           <div className="flex items-center gap-3 w-[280px] min-w-0">
-            <img src={currentTrack.thumbnail} alt={currentTrack.title} className={`h-14 w-14 rounded-xl object-cover shadow-xl ${isPlaying ? "animate-pulse-glow" : ""}`} />
+            <img src={thumbnailSrc} alt={currentTrack.title} className={`h-14 w-14 rounded-xl object-cover shadow-xl ${isPlaying ? "animate-pulse-glow" : ""}`} />
             <div className="min-w-0">
               <p className="text-sm font-semibold truncate text-foreground">{currentTrack.title}</p>
               <p className="text-xs text-muted-foreground truncate mt-0.5">{currentTrack.artist}</p>

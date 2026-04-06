@@ -28,6 +28,7 @@ function AppContent() {
   } = usePlaylistStore();
   const {
     saveTrackOffline, savePlaylistOffline, isTrackOffline, isTrackSaving,
+    getOfflineAudioUrl, getOfflineThumbnailUrl,
   } = useOfflineStorage();
   const [addToPlaylistTrack, setAddToPlaylistTrack] = useState<Track | null>(null);
   const { addToHistory } = useListeningHistory();
@@ -36,7 +37,6 @@ function AppContent() {
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const prevTrackRef = useRef<{ track: Track; listenedTime: number } | null>(null);
 
-  // Track actual listened time: save when track changes
   useEffect(() => {
     if (prevTrackRef.current && prevTrackRef.current.track.id !== currentTrack?.id) {
       const { track, listenedTime } = prevTrackRef.current;
@@ -49,14 +49,12 @@ function AppContent() {
     }
   }, [currentTrack?.id]);
 
-  // Update listened time continuously
   useEffect(() => {
     if (prevTrackRef.current && currentTrack && prevTrackRef.current.track.id === currentTrack.id) {
       prevTrackRef.current.listenedTime = currentTime;
     }
   }, [currentTime, currentTrack?.id]);
 
-  // Save on page unload
   useEffect(() => {
     const handleUnload = () => {
       if (prevTrackRef.current && prevTrackRef.current.listenedTime >= 5) {
@@ -119,7 +117,7 @@ function AppContent() {
         {activeView === "home" && <HomeView onNavigate={handleViewChange} />}
         {activeView === "search" && <SearchView onAddToPlaylist={handleAddToPlaylist} />}
         {activeView === "history" && <HistoryView />}
-        
+
         {activePlaylist && (
           <PlaylistView
             playlist={activePlaylist}
@@ -131,11 +129,17 @@ function AppContent() {
             isTrackOffline={isTrackOffline}
             onSaveTrackOffline={saveTrackOffline}
             isTrackSaving={isTrackSaving}
+            getOfflineAudioUrl={getOfflineAudioUrl}
+            getOfflineThumbnailUrl={getOfflineThumbnailUrl}
           />
         )}
       </main>
 
-      <PlayerBar onToggleLyrics={() => setLyricsOpen(v => !v)} lyricsOpen={lyricsOpen} />
+      <PlayerBar
+        onToggleLyrics={() => setLyricsOpen(v => !v)}
+        lyricsOpen={lyricsOpen}
+        getOfflineThumbnailUrl={getOfflineThumbnailUrl}
+      />
       <LyricsPanel open={lyricsOpen} onClose={() => setLyricsOpen(false)} />
 
       <Dialog open={!!addToPlaylistTrack} onOpenChange={() => setAddToPlaylistTrack(null)}>

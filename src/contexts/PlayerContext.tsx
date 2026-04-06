@@ -14,7 +14,7 @@ interface PlayerState {
 }
 
 interface PlayerContextType extends PlayerState {
-  playTrack: (track: Track, newQueue?: Track[]) => void;
+  playTrack: (track: Track, newQueue?: Track[], audioUrl?: string) => void;
   togglePlay: () => void;
   seekTo: (time: number) => void;
   setVolume: (vol: number) => void;
@@ -173,14 +173,14 @@ export function PlayerProvider({ children, onTrackListened }: PlayerProviderProp
     };
   }, [audio, saveListenedTime]);
 
-  const playTrack = useCallback((track: Track, newQueue?: Track[]) => {
-    // Salva tempo da track anterior antes de trocar
+  const playTrack = useCallback((track: Track, newQueue?: Track[], audioUrl?: string) => {
     saveListenedTime();
-
     const q = newQueue || [track];
     const idx = newQueue ? newQueue.findIndex(t => t.id === track.id) : 0;
     retryCountRef.current = 0;
-    audio.src = getStreamUrl(track.url);
+    
+    // Usa audioUrl offline se fornecido, senão usa stream normal
+    audio.src = audioUrl || getStreamUrl(track.url);
     audio.play().catch(() => {});
     setState(s => ({
       ...s,

@@ -140,6 +140,22 @@ export function useOfflineStorage() {
         [],
     );
 
+    const getOfflineThumbnailUrl = useCallback(
+        async (trackId: string): Promise<string | null> => {
+            try {
+                const db = await getDB();
+                const track = await db.get("tracks", trackId);
+                if (track?.thumbnailBlob) {
+                    return URL.createObjectURL(track.thumbnailBlob);
+                }
+            } catch (e) {
+                console.error("Error getting offline thumbnail:", e);
+            }
+            return null;
+        },
+        [],
+    );
+
     const getOfflineTracks = useCallback(async (): Promise<Track[]> => {
         try {
             const db = await getDB();
@@ -188,6 +204,7 @@ export function useOfflineStorage() {
         saveTrackOffline,
         removeTrackOffline,
         getOfflineAudioUrl,
+        getOfflineThumbnailUrl,
         getOfflineTracks,
         savePlaylistOffline,
         isTrackOffline,

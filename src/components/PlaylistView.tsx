@@ -25,6 +25,35 @@ interface PlaylistViewProps {
   isTrackOffline?: (trackId: string) => boolean;
   onSaveTrackOffline?: (track: Track) => void;
   isTrackSaving?: (trackId: string) => boolean;
+  getOfflineAudioUrl?: (trackId: string) => Promise<string | null>;
+  getOfflineThumbnailUrl?: (trackId: string) => Promise<string | null>;
+}
+
+// Componente de imagem que resolve blob offline
+function TrackImage({
+  track,
+  className,
+  getOfflineThumbnailUrl,
+  isOnline,
+}: {
+  track: Track;
+  className: string;
+  getOfflineThumbnailUrl?: (id: string) => Promise<string | null>;
+  isOnline: boolean;
+}) {
+  const [src, setSrc] = useState<string>(track.thumbnail);
+
+  useEffect(() => {
+    if (!isOnline && getOfflineThumbnailUrl) {
+      getOfflineThumbnailUrl(track.id).then(url => {
+        if (url) setSrc(url);
+      });
+    } else {
+      setSrc(track.thumbnail);
+    }
+  }, [track.id, track.thumbnail, isOnline, getOfflineThumbnailUrl]);
+
+  return <img src={src} alt="" className={className} />;
 }
 
 export default function PlaylistView({
@@ -37,6 +66,8 @@ export default function PlaylistView({
   isTrackOffline,
   onSaveTrackOffline,
   isTrackSaving,
+  getOfflineAudioUrl,
+  getOfflineThumbnailUrl,
 }: PlaylistViewProps) {
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
   const [copied, setCopied] = useState(false);
@@ -44,19 +75,33 @@ export default function PlaylistView({
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
-  const on = () => setIsOnline(true);
-  const off = () => setIsOnline(false);
-  window.addEventListener("online", on);
-  window.addEventListener("offline", off);
-  return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-}, []);
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
 
-const visibleTracks = isOnline
-  ? playlist.tracks
-  : playlist.tracks.filter(t => isTrackOffline?.(t.id));
+  const visibleTracks = isOnline
+    ? playlist.tracks
+    : playlist.tracks.filter(t => isTrackOffline?.(t.id));
+
+  // Resolve URL de áudio offline se necessário, depois toca
+  const handlePlayTrack = async (track: Track, queue: Track[]) => {
+    if (!isOnline && getOfflineAudioUrl) {
+      const offlineUrl = await getOfflineAudioUrl(track.id);
+      if (!offlineUrl) {
+        toast.error("Música não disponível offline");
+        return;
+      }
+      playTrack(track, queue, offlineUrl);
+    } else {
+      playTrack(track, queue);
+    }
+  };
 
   const handlePlayAll = () => {
-    if (visibleTracks.length > 0) playTrack(visibleTracks[0], visibleTracks);
+    if (visibleTracks.length > 0) handlePlayTrack(visibleTracks[0], visibleTracks);
   };
 
   const handleDownloadAll = async () => {
@@ -79,7 +124,6 @@ const visibleTracks = isOnline
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         toast.success(`(${i + 1}/${visibleTracks.length}) "${track.title}" baixada`);
-        // Small delay between downloads
         if (i < visibleTracks.length - 1) {
           await new Promise(r => setTimeout(r, 1000));
         }
@@ -131,7 +175,12 @@ const visibleTracks = isOnline
           <div className="relative flex-shrink-0 group mx-auto sm:mx-0">
             <div className="flex h-36 w-36 sm:h-44 sm:w-44 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 overflow-hidden shadow-2xl">
               {visibleTracks.length > 0 && visibleTracks[0].thumbnail ? (
-                <img src={visibleTracks[0].thumbnail} alt="" className="h-full w-full object-cover" />
+                <TrackImage
+                  track={visibleTracks[0]}
+                  className="h-full w-full object-cover"
+                  getOfflineThumbnailUrl={getOfflineThumbnailUrl}
+                  isOnline={isOnline}
+                />
               ) : (
                 <Music className="h-12 w-12 sm:h-16 sm:w-16 text-primary/40" />
               )}
@@ -169,8 +218,7 @@ const visibleTracks = isOnline
           <Button onClick={handlePlayAll} disabled={visibleTracks.length === 0} size="lg" className="rounded-full gap-2 px-6 sm:px-8 glow-primary-sm hover:glow-primary transition-all">
             <Play className="h-5 w-5" /> Reproduzir
           </Button>
-          
-          {/* Share dropdown */}
+
           {onUpdateVisibility && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -210,7 +258,7 @@ const visibleTracks = isOnline
                     <p className="text-[11px] text-muted-foreground">Todos podem encontrar</p>
                   </div>
                 </DropdownMenuItem>
-                
+
                 {shareLink && visibility !== "private" && (
                   <>
                     <DropdownMenuSeparator />
@@ -270,9 +318,13 @@ const visibleTracks = isOnline
               const offline = isTrackOffline?.(track.id);
               const savingOffline = isTrackSaving?.(track.id);
               return (
-                <motion.div key={`${track.id}-${i}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+                <motion.div
+                  key={`${track.id}-${i}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.03 }}
                   className={`flex items-center gap-2 sm:gap-3 rounded-xl p-2 sm:p-3 transition-all duration-200 group cursor-pointer ${playing ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onClick={() => { if (playing) togglePlay(); else playTrack(track, visibleTracks); }}
+                  onClick={() => { if (playing) togglePlay(); else handlePlayTrack(track, visibleTracks); }}
                 >
                   <div className="w-6 sm:w-8 flex items-center justify-center flex-shrink-0">
                     {playing ? (
@@ -284,7 +336,12 @@ const visibleTracks = isOnline
                       </>
                     )}
                   </div>
-                  <img src={track.thumbnail} alt="" className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover flex-shrink-0 shadow-lg" />
+                  <TrackImage
+                    track={track}
+                    className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg object-cover flex-shrink-0 shadow-lg"
+                    getOfflineThumbnailUrl={getOfflineThumbnailUrl}
+                    isOnline={isOnline}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
                       <p className={`text-xs sm:text-sm font-semibold truncate ${playing ? "text-primary" : "text-foreground"}`}>{track.title}</p>
