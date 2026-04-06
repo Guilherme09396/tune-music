@@ -7,249 +7,367 @@ import { toast } from "sonner";
 export type PlaylistVisibility = "private" | "link" | "public";
 
 export interface Playlist {
-  id: string;
-  name: string;
-  tracks: Track[];
-  visibility: PlaylistVisibility;
-  share_id: string | null;
-  user_id?: string;
+    id: string;
+    name: string;
+    tracks: Track[];
+    visibility: PlaylistVisibility;
+    share_id: string | null;
+    user_id?: string;
 }
 
 function generateShareId(): string {
-  return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+    return (
+        Math.random().toString(36).substring(2, 10) + Date.now().toString(36)
+    );
+}
+
+const CACHE_KEY = "soundflow-playlists-cache";
+
+function saveCachedPlaylists(playlists: Playlist[]) {
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify(playlists));
+    } catch {}
+}
+
+function loadCachedPlaylists(): Playlist[] {
+    try {
+        const raw = localStorage.getItem(CACHE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch {
+        return [];
+    }
 }
 
 export function usePlaylistStore() {
-  const { user } = useAuth();
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
-  const [loading, setLoading] = useState(true);
+    const { user } = useAuth();
+    const [playlists, setPlaylists] = useState<Playlist[]>([]);
+    const [loading, setLoading] = useState(true);
 
-  const fetchPlaylists = useCallback(async () => {
-    if (!user) { setPlaylists([]); setLoading(false); return; }
-    try {
-      const { data: pls, error: plError } = await supabase
-        .from("playlists")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: true });
+    const fetchPlaylists = useCallback(async () => {
+        if (!user) {
+            setPlaylists([]);
+            setLoading(false);
+            return;
+        }
 
-      if (plError) throw plError;
+        // 👇 Se offline, carrega do cache imediatamente
+        if (!navigator.onLine) {
+            setPlaylists(loadCachedPlaylists());
+            setLoading(false);
+            return;
+        }
 
-      const playlistsWithTracks: Playlist[] = [];
-      for (const pl of pls || []) {
-        const { data: tracks, error: tError } = await supabase
-          .from("playlist_tracks")
-          .select("*")
-          .eq("playlist_id", pl.id)
-          .order("position", { ascending: true });
+        try {
+            const { data: pls, error: plError } = await supabase
+                .from("playlists")
+                .select("*")
+                .eq("user_id", user.id)
+                .order("created_at", { ascending: true });
 
-        if (tError) throw tError;
+            if (plError) throw plError;
 
-        playlistsWithTracks.push({
-          id: pl.id,
-          name: pl.name,
-          visibility: (pl as any).visibility || "private",
-          share_id: (pl as any).share_id || null,
-          user_id: pl.user_id,
-          tracks: (tracks || []).map(t => ({
-            id: t.track_id,
-            title: t.title,
-            artist: t.artist,
-            duration: Number(t.duration),
-            thumbnail: t.thumbnail,
-            url: t.url,
-          })),
-        });
-      }
-      setPlaylists(playlistsWithTracks);
-    } catch (err) {
-      console.error("Error fetching playlists:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+            const playlistsWithTracks: Playlist[] = [];
+            for (const pl of pls || []) {
+                const { data: tracks, error: tError } = await supabase
+                    .from("playlist_tracks")
+                    .select("*")
+                    .eq("playlist_id", pl.id)
+                    .order("position", { ascending: true });
 
-  useEffect(() => { fetchPlaylists(); }, [fetchPlaylists]);
+                if (tError) throw tError;
 
-  const createPlaylist = useCallback(async (name: string): Promise<string> => {
-    if (!user) return "";
-    const { data, error } = await supabase
-      .from("playlists")
-      .insert({ name, user_id: user.id } as any)
-      .select("id")
-      .single();
+                playlistsWithTracks.push({
+                    id: pl.id,
+                    name: pl.name,
+                    visibility: (pl as any).visibility || "private",
+                    share_id: (pl as any).share_id || null,
+                    user_id: pl.user_id,
+                    tracks: (tracks || []).map((t) => ({
+                        id: t.track_id,
+                        title: t.title,
+                        artist: t.artist,
+                        duration: Number(t.duration),
+                        thumbnail: t.thumbnail,
+                        url: t.url,
+                    })),
+                });
+            }
+            setPlaylists(playlistsWithTracks);
+            saveCachedPlaylists(playlistsWithTracks); // 👈 Salva no cache após carregar
+        } catch (err) {
+            console.error("Error fetching playlists:", err);
+            // 👇 Fallback pro cache se o Supabase falhar
+            const cached = loadCachedPlaylists();
+            if (cached.length > 0) setPlaylists(cached);
+        } finally {
+            setLoading(false);
+        }
+    }, [user]);
 
-    if (error) { toast.error("Erro ao criar playlist"); return ""; }
-    const newPl: Playlist = { id: data.id, name, tracks: [], visibility: "private", share_id: null };
-    setPlaylists(prev => [...prev, newPl]);
-    toast.success(`Playlist "${name}" criada!`);
-    return data.id;
-  }, [user]);
+    useEffect(() => {
+        const handleOnline = () => fetchPlaylists();
+        window.addEventListener("online", handleOnline);
+        return () => window.removeEventListener("online", handleOnline);
+    }, [fetchPlaylists]);
 
-  const deletePlaylist = useCallback(async (id: string) => {
-    const { error } = await supabase.from("playlists").delete().eq("id", id);
-    if (error) { toast.error("Erro ao remover playlist"); return; }
-    setPlaylists(prev => prev.filter(p => p.id !== id));
-    toast.success("Playlist removida");
-  }, []);
+    useEffect(() => {
+        fetchPlaylists();
+    }, [fetchPlaylists]);
 
-  const addTrackToPlaylist = useCallback(async (playlistId: string, track: Track) => {
-    const pl = playlists.find(p => p.id === playlistId);
-    if (pl?.tracks.some(t => t.id === track.id)) {
-      toast.info("Música já está na playlist");
-      return;
-    }
+    const createPlaylist = useCallback(
+        async (name: string): Promise<string> => {
+            if (!user) return "";
+            const { data, error } = await supabase
+                .from("playlists")
+                .insert({ name, user_id: user.id } as any)
+                .select("id")
+                .single();
 
-    const position = pl ? pl.tracks.length : 0;
-    const { error } = await supabase.from("playlist_tracks").insert({
-      playlist_id: playlistId,
-      track_id: track.id,
-      title: track.title,
-      artist: track.artist,
-      duration: track.duration,
-      thumbnail: track.thumbnail,
-      url: track.url,
-      position,
-    });
+            if (error) {
+                toast.error("Erro ao criar playlist");
+                return "";
+            }
+            const newPl: Playlist = {
+                id: data.id,
+                name,
+                tracks: [],
+                visibility: "private",
+                share_id: null,
+            };
+            setPlaylists((prev) => [...prev, newPl]);
+            toast.success(`Playlist "${name}" criada!`);
+            return data.id;
+        },
+        [user],
+    );
 
-    if (error) { toast.error("Erro ao adicionar música"); return; }
+    const deletePlaylist = useCallback(async (id: string) => {
+        const { error } = await supabase
+            .from("playlists")
+            .delete()
+            .eq("id", id);
+        if (error) {
+            toast.error("Erro ao remover playlist");
+            return;
+        }
+        setPlaylists((prev) => prev.filter((p) => p.id !== id));
+        toast.success("Playlist removida");
+    }, []);
 
-    setPlaylists(prev => prev.map(p =>
-      p.id === playlistId ? { ...p, tracks: [...p.tracks, track] } : p
-    ));
-    toast.success("Música adicionada!");
-  }, [playlists]);
+    const addTrackToPlaylist = useCallback(
+        async (playlistId: string, track: Track) => {
+            const pl = playlists.find((p) => p.id === playlistId);
+            if (pl?.tracks.some((t) => t.id === track.id)) {
+                toast.info("Música já está na playlist");
+                return;
+            }
 
-  const removeTrackFromPlaylist = useCallback(async (playlistId: string, trackId: string) => {
-    const { error } = await supabase
-      .from("playlist_tracks")
-      .delete()
-      .eq("playlist_id", playlistId)
-      .eq("track_id", trackId);
+            const position = pl ? pl.tracks.length : 0;
+            const { error } = await supabase.from("playlist_tracks").insert({
+                playlist_id: playlistId,
+                track_id: track.id,
+                title: track.title,
+                artist: track.artist,
+                duration: track.duration,
+                thumbnail: track.thumbnail,
+                url: track.url,
+                position,
+            });
 
-    if (error) { toast.error("Erro ao remover música"); return; }
+            if (error) {
+                toast.error("Erro ao adicionar música");
+                return;
+            }
 
-    setPlaylists(prev => prev.map(p =>
-      p.id === playlistId ? { ...p, tracks: p.tracks.filter(t => t.id !== trackId) } : p
-    ));
-  }, []);
+            setPlaylists((prev) =>
+                prev.map((p) =>
+                    p.id === playlistId
+                        ? { ...p, tracks: [...p.tracks, track] }
+                        : p,
+                ),
+            );
+            toast.success("Música adicionada!");
+        },
+        [playlists],
+    );
 
-  const updateVisibility = useCallback(async (playlistId: string, visibility: PlaylistVisibility) => {
-    const pl = playlists.find(p => p.id === playlistId);
-    if (!pl) return;
+    const removeTrackFromPlaylist = useCallback(
+        async (playlistId: string, trackId: string) => {
+            const { error } = await supabase
+                .from("playlist_tracks")
+                .delete()
+                .eq("playlist_id", playlistId)
+                .eq("track_id", trackId);
 
-    const updates: any = { visibility };
+            if (error) {
+                toast.error("Erro ao remover música");
+                return;
+            }
 
-    // Generate share_id if sharing and doesn't have one
-    if (visibility !== "private" && !pl.share_id) {
-      updates.share_id = generateShareId();
-    }
+            setPlaylists((prev) =>
+                prev.map((p) =>
+                    p.id === playlistId
+                        ? {
+                              ...p,
+                              tracks: p.tracks.filter((t) => t.id !== trackId),
+                          }
+                        : p,
+                ),
+            );
+        },
+        [],
+    );
 
-    const { error } = await supabase
-      .from("playlists")
-      .update(updates)
-      .eq("id", playlistId);
+    const updateVisibility = useCallback(
+        async (playlistId: string, visibility: PlaylistVisibility) => {
+            const pl = playlists.find((p) => p.id === playlistId);
+            if (!pl) return;
 
-    if (error) { toast.error("Erro ao atualizar visibilidade"); return; }
+            const updates: any = { visibility };
 
-    setPlaylists(prev => prev.map(p =>
-      p.id === playlistId ? { ...p, visibility, share_id: updates.share_id || p.share_id } : p
-    ));
+            // Generate share_id if sharing and doesn't have one
+            if (visibility !== "private" && !pl.share_id) {
+                updates.share_id = generateShareId();
+            }
 
-    const labels = { private: "Privada", link: "Compartilhável via link", public: "Pública" };
-    toast.success(`Playlist agora é: ${labels[visibility]}`);
-  }, [playlists]);
+            const { error } = await supabase
+                .from("playlists")
+                .update(updates)
+                .eq("id", playlistId);
 
-  const getShareLink = useCallback((playlistId: string): string | null => {
-    const pl = playlists.find(p => p.id === playlistId);
-    if (!pl?.share_id || pl.visibility === "private") return null;
-    return `${window.location.origin}/shared/${pl.share_id}`;
-  }, [playlists]);
+            if (error) {
+                toast.error("Erro ao atualizar visibilidade");
+                return;
+            }
 
-  const fetchSharedPlaylist = useCallback(async (shareId: string): Promise<Playlist | null> => {
-    // Use raw filter to avoid deep type instantiation issues
-    const { data: pls, error } = await supabase
-      .from("playlists")
-      .select("*")
-      .or(`visibility.eq.link,visibility.eq.public`)
-      .filter("share_id", "eq", shareId);
+            setPlaylists((prev) =>
+                prev.map((p) =>
+                    p.id === playlistId
+                        ? {
+                              ...p,
+                              visibility,
+                              share_id: updates.share_id || p.share_id,
+                          }
+                        : p,
+                ),
+            );
 
-    if (error || !pls || pls.length === 0) return null;
-    const pl = pls[0];
+            const labels = {
+                private: "Privada",
+                link: "Compartilhável via link",
+                public: "Pública",
+            };
+            toast.success(`Playlist agora é: ${labels[visibility]}`);
+        },
+        [playlists],
+    );
 
-    const { data: tracks } = await supabase
-      .from("playlist_tracks")
-      .select("*")
-      .eq("playlist_id", pl.id)
-      .order("position", { ascending: true });
+    const getShareLink = useCallback(
+        (playlistId: string): string | null => {
+            const pl = playlists.find((p) => p.id === playlistId);
+            if (!pl?.share_id || pl.visibility === "private") return null;
+            return `${window.location.origin}/shared/${pl.share_id}`;
+        },
+        [playlists],
+    );
+
+    const fetchSharedPlaylist = useCallback(
+        async (shareId: string): Promise<Playlist | null> => {
+            // Use raw filter to avoid deep type instantiation issues
+            const { data: pls, error } = await supabase
+                .from("playlists")
+                .select("*")
+                .or(`visibility.eq.link,visibility.eq.public`)
+                .filter("share_id", "eq", shareId);
+
+            if (error || !pls || pls.length === 0) return null;
+            const pl = pls[0];
+
+            const { data: tracks } = await supabase
+                .from("playlist_tracks")
+                .select("*")
+                .eq("playlist_id", pl.id)
+                .order("position", { ascending: true });
+
+            return {
+                id: pl.id,
+                name: pl.name,
+                visibility: (pl as any).visibility || "private",
+                share_id: (pl as any).share_id || null,
+                user_id: pl.user_id,
+                tracks: (tracks || []).map((t) => ({
+                    id: t.track_id,
+                    title: t.title,
+                    artist: t.artist,
+                    duration: Number(t.duration),
+                    thumbnail: t.thumbnail,
+                    url: t.url,
+                })),
+            };
+        },
+        [],
+    );
+
+    const copySharedPlaylist = useCallback(
+        async (sharedPlaylist: Playlist): Promise<string> => {
+            if (!user) return "";
+
+            const { data, error } = await supabase
+                .from("playlists")
+                .insert({ name: sharedPlaylist.name, user_id: user.id } as any)
+                .select("id")
+                .single();
+
+            if (error) {
+                toast.error("Erro ao salvar playlist");
+                return "";
+            }
+
+            // Copy all tracks
+            if (sharedPlaylist.tracks.length > 0) {
+                const trackInserts = sharedPlaylist.tracks.map((track, i) => ({
+                    playlist_id: data.id,
+                    track_id: track.id,
+                    title: track.title,
+                    artist: track.artist,
+                    duration: track.duration,
+                    thumbnail: track.thumbnail,
+                    url: track.url,
+                    position: i,
+                }));
+
+                const { error: tError } = await supabase
+                    .from("playlist_tracks")
+                    .insert(trackInserts);
+                if (tError) console.error("Error copying tracks:", tError);
+            }
+
+            const newPl: Playlist = {
+                id: data.id,
+                name: sharedPlaylist.name,
+                tracks: [...sharedPlaylist.tracks],
+                visibility: "private",
+                share_id: null,
+            };
+            setPlaylists((prev) => [...prev, newPl]);
+            toast.success(
+                `Playlist "${sharedPlaylist.name}" salva na sua biblioteca!`,
+            );
+            return data.id;
+        },
+        [user],
+    );
 
     return {
-      id: pl.id,
-      name: pl.name,
-      visibility: (pl as any).visibility || "private",
-      share_id: (pl as any).share_id || null,
-      user_id: pl.user_id,
-      tracks: (tracks || []).map(t => ({
-        id: t.track_id,
-        title: t.title,
-        artist: t.artist,
-        duration: Number(t.duration),
-        thumbnail: t.thumbnail,
-        url: t.url,
-      })),
+        playlists,
+        loading,
+        createPlaylist,
+        deletePlaylist,
+        addTrackToPlaylist,
+        removeTrackFromPlaylist,
+        updateVisibility,
+        getShareLink,
+        fetchSharedPlaylist,
+        copySharedPlaylist,
     };
-  }, []);
-
-  const copySharedPlaylist = useCallback(async (sharedPlaylist: Playlist): Promise<string> => {
-    if (!user) return "";
-    
-    const { data, error } = await supabase
-      .from("playlists")
-      .insert({ name: sharedPlaylist.name, user_id: user.id } as any)
-      .select("id")
-      .single();
-
-    if (error) { toast.error("Erro ao salvar playlist"); return ""; }
-
-    // Copy all tracks
-    if (sharedPlaylist.tracks.length > 0) {
-      const trackInserts = sharedPlaylist.tracks.map((track, i) => ({
-        playlist_id: data.id,
-        track_id: track.id,
-        title: track.title,
-        artist: track.artist,
-        duration: track.duration,
-        thumbnail: track.thumbnail,
-        url: track.url,
-        position: i,
-      }));
-
-      const { error: tError } = await supabase.from("playlist_tracks").insert(trackInserts);
-      if (tError) console.error("Error copying tracks:", tError);
-    }
-
-    const newPl: Playlist = {
-      id: data.id,
-      name: sharedPlaylist.name,
-      tracks: [...sharedPlaylist.tracks],
-      visibility: "private",
-      share_id: null,
-    };
-    setPlaylists(prev => [...prev, newPl]);
-    toast.success(`Playlist "${sharedPlaylist.name}" salva na sua biblioteca!`);
-    return data.id;
-  }, [user]);
-
-  return {
-    playlists,
-    loading,
-    createPlaylist,
-    deletePlaylist,
-    addTrackToPlaylist,
-    removeTrackFromPlaylist,
-    updateVisibility,
-    getShareLink,
-    fetchSharedPlaylist,
-    copySharedPlaylist,
-  };
 }
