@@ -54,6 +54,8 @@ export default defineConfig(({ mode }) => ({
                 cleanupOutdatedCaches: true,
                 skipWaiting: true,
                 clientsClaim: true,
+                // ✅ IMPORTANTE: diz ao SW para NUNCA interceptar requisições de stream/download/search/info
+                ignoreURLParametersMatching: [/.*/],
                 runtimeCaching: [
                     {
                         urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -91,6 +93,21 @@ export default defineConfig(({ mode }) => ({
                             },
                             cacheableResponse: { statuses: [0, 200] },
                         },
+                    },
+                    {
+                        // Nunca cacheia chamadas para o backend (stream, search, download, info)
+                        urlPattern: ({ url }) => {
+                            const backendHosts = (
+                                import.meta.env.VITE_API_URL || ""
+                            ).replace("https://", "");
+                            return (
+                                url.pathname.includes("/stream") ||
+                                url.pathname.includes("/download") ||
+                                url.pathname.includes("/search") ||
+                                url.pathname.includes("/info")
+                            );
+                        },
+                        handler: "NetworkOnly",
                     },
                 ],
             },
