@@ -95,11 +95,7 @@ export default defineConfig(({ mode }) => ({
                         },
                     },
                     {
-                        // Nunca cacheia chamadas para o backend (stream, search, download, info)
                         urlPattern: ({ url }) => {
-                            const backendHosts = (
-                                import.meta.env.VITE_API_URL || ""
-                            ).replace("https://", "");
                             return (
                                 url.pathname.includes("/stream") ||
                                 url.pathname.includes("/download") ||
