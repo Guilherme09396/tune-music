@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Track, formatDuration, getDownloadUrl } from "@/lib/api";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { PlaylistVisibility } from "@/hooks/usePlaylistStore";
@@ -41,18 +41,31 @@ export default function PlaylistView({
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+  const on = () => setIsOnline(true);
+  const off = () => setIsOnline(false);
+  window.addEventListener("online", on);
+  window.addEventListener("offline", off);
+  return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+}, []);
+
+const visibleTracks = isOnline
+  ? playlist.tracks
+  : playlist.tracks.filter(t => isTrackOffline?.(t.id));
 
   const handlePlayAll = () => {
-    if (playlist.tracks.length > 0) playTrack(playlist.tracks[0], playlist.tracks);
+    if (visibleTracks.length > 0) playTrack(visibleTracks[0], visibleTracks);
   };
 
   const handleDownloadAll = async () => {
-    if (playlist.tracks.length === 0) return;
+    if (visibleTracks.length === 0) return;
     setDownloading(true);
-    toast.info(`Baixando ${playlist.tracks.length} músicas...`);
+    toast.info(`Baixando ${visibleTracks.length} músicas...`);
 
-    for (let i = 0; i < playlist.tracks.length; i++) {
-      const track = playlist.tracks[i];
+    for (let i = 0; i < visibleTracks.length; i++) {
+      const track = visibleTracks[i];
       try {
         const response = await fetch(getDownloadUrl(track.url, track.title));
         if (!response.ok) throw new Error("Download failed");
@@ -65,9 +78,9 @@ export default function PlaylistView({
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        toast.success(`(${i + 1}/${playlist.tracks.length}) "${track.title}" baixada`);
+        toast.success(`(${i + 1}/${visibleTracks.length}) "${track.title}" baixada`);
         // Small delay between downloads
-        if (i < playlist.tracks.length - 1) {
+        if (i < visibleTracks.length - 1) {
           await new Promise(r => setTimeout(r, 1000));
         }
       } catch (err) {
@@ -108,7 +121,7 @@ export default function PlaylistView({
   };
 
   const isCurrentlyPlaying = (track: Track) => currentTrack?.id === track.id && isPlaying;
-  const totalDuration = playlist.tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+  const totalDuration = visibleTracks.reduce((sum, t) => sum + (t.duration || 0), 0);
   const visibility = playlist.visibility || "private";
 
   return (
@@ -117,13 +130,13 @@ export default function PlaylistView({
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6">
           <div className="relative flex-shrink-0 group mx-auto sm:mx-0">
             <div className="flex h-36 w-36 sm:h-44 sm:w-44 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-primary/5 overflow-hidden shadow-2xl">
-              {playlist.tracks.length > 0 && playlist.tracks[0].thumbnail ? (
-                <img src={playlist.tracks[0].thumbnail} alt="" className="h-full w-full object-cover" />
+              {visibleTracks.length > 0 && visibleTracks[0].thumbnail ? (
+                <img src={visibleTracks[0].thumbnail} alt="" className="h-full w-full object-cover" />
               ) : (
                 <Music className="h-12 w-12 sm:h-16 sm:w-16 text-primary/40" />
               )}
             </div>
-            {playlist.tracks.length > 0 && (
+            {visibleTracks.length > 0 && (
               <button onClick={handlePlayAll} className="absolute bottom-3 right-3 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-xl glow-primary opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-105">
                 <Play className="h-4 w-4 sm:h-5 sm:w-5 ml-0.5" />
               </button>
@@ -139,14 +152,21 @@ export default function PlaylistView({
             </div>
             <h1 className="text-2xl sm:text-4xl font-bold text-foreground truncate">{playlist.name}</h1>
             <p className="text-sm text-muted-foreground mt-2 sm:mt-3">
-              {playlist.tracks.length} {playlist.tracks.length === 1 ? "música" : "músicas"}
+              {visibleTracks.length} {visibleTracks.length === 1 ? "música" : "músicas"}
               {totalDuration > 0 && ` • ${formatDuration(totalDuration)}`}
             </p>
           </div>
         </motion.div>
 
+        {!isOnline && (
+          <div className="flex items-center gap-2 px-4 sm:px-6 py-2 text-xs text-muted-foreground bg-muted/30 rounded-lg mx-4 sm:mx-6 mb-2">
+            <WifiOff className="h-3.5 w-3.5" />
+            Modo offline — exibindo apenas músicas salvas ({visibleTracks.length} de {playlist.tracks.length})
+          </div>
+        )}
+
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }} className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3 mt-5 sm:mt-6">
-          <Button onClick={handlePlayAll} disabled={playlist.tracks.length === 0} size="lg" className="rounded-full gap-2 px-6 sm:px-8 glow-primary-sm hover:glow-primary transition-all">
+          <Button onClick={handlePlayAll} disabled={visibleTracks.length === 0} size="lg" className="rounded-full gap-2 px-6 sm:px-8 glow-primary-sm hover:glow-primary transition-all">
             <Play className="h-5 w-5" /> Reproduzir
           </Button>
           
@@ -209,7 +229,7 @@ export default function PlaylistView({
             variant="outline"
             size="lg"
             className="rounded-full gap-2 border-border/50 hover:border-primary/50 hover:text-primary transition-all"
-            disabled={playlist.tracks.length === 0 || downloading}
+            disabled={visibleTracks.length === 0 || downloading}
           >
             {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
             Baixar tudo
@@ -217,11 +237,11 @@ export default function PlaylistView({
 
           {onSaveOffline && (
             <Button
-              onClick={() => onSaveOffline(playlist.tracks)}
+              onClick={() => onSaveOffline(visibleTracks)}
               variant="outline"
               size="lg"
               className="rounded-full gap-2 border-border/50 hover:border-primary/50 hover:text-primary transition-all"
-              disabled={playlist.tracks.length === 0}
+              disabled={visibleTracks.length === 0}
             >
               <WifiOff className="h-4 w-4" /> Salvar offline
             </Button>
@@ -234,7 +254,7 @@ export default function PlaylistView({
       </div>
 
       <div className="px-4 sm:px-6 pb-28">
-        {playlist.tracks.length === 0 ? (
+        {visibleTracks.length === 0 ? (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20">
             <div className="relative mb-6">
               <div className="absolute inset-0 bg-primary/10 rounded-full blur-2xl scale-150" />
@@ -245,14 +265,14 @@ export default function PlaylistView({
           </motion.div>
         ) : (
           <div className="space-y-1">
-            {playlist.tracks.map((track, i) => {
+            {visibleTracks.map((track, i) => {
               const playing = isCurrentlyPlaying(track);
               const offline = isTrackOffline?.(track.id);
               const savingOffline = isTrackSaving?.(track.id);
               return (
                 <motion.div key={`${track.id}-${i}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                   className={`flex items-center gap-2 sm:gap-3 rounded-xl p-2 sm:p-3 transition-all duration-200 group cursor-pointer ${playing ? "bg-primary/10" : "hover:bg-muted/50"}`}
-                  onClick={() => { if (playing) togglePlay(); else playTrack(track, playlist.tracks); }}
+                  onClick={() => { if (playing) togglePlay(); else playTrack(track, visibleTracks); }}
                 >
                   <div className="w-6 sm:w-8 flex items-center justify-center flex-shrink-0">
                     {playing ? (

@@ -120,3 +120,13 @@ export function formatDuration(seconds: number): string {
     const s = Math.floor(seconds % 60);
     return `${m}:${s.toString().padStart(2, "0")}`;
 }
+
+export async function fetchAudioBlob(videoUrl: string): Promise<Blob> {
+    return tryEachServer(async (base) => {
+        const res = await fetch(
+            `${base}/stream?url=${encodeURIComponent(videoUrl)}`,
+        );
+        if (!res.ok) throw new Error(`Servidor retornou ${res.status}`);
+        return res.blob();
+    });
+}
