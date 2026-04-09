@@ -72,7 +72,14 @@ export function useOfflineStorage() {
                 );
 
                 // Fetch audio
-                const audioBlob = await fetchDirectAudioBlob(track.url);
+                // No useOfflineStorage, dentro do saveTrackOffline:
+                let audioBlob: Blob;
+                try {
+                    audioBlob = await fetchDirectAudioBlob(track.url);
+                } catch {
+                    // Fallback: baixa via proxy /stream
+                    audioBlob = await fetchAudioBlob(track.url);
+                }
 
                 // Fetch thumbnail
                 let thumbnailBlob: Blob | undefined;
