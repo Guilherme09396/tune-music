@@ -133,27 +133,32 @@ export function PlayerProvider({ children, onTrackListened }: PlayerProviderProp
     };
 
     const onError = () => {
-      const maxRetries = getServerCount() - 1; // tenta todos os outros servidores
-      console.error(`Audio playback error (tentativa ${retryCountRef.current + 1}/${maxRetries + 1})`);
+      const maxRetries = getServerCount() - 1;
 
-      if (retryCountRef.current < maxRetries) {
-        retryCountRef.current += 1;
-        markServerFailed(); // alterna para o próximo servidor
-        setState(prev => {
-          if (prev.currentTrack) {
-            const newUrl = getStreamUrl(prev.currentTrack.url);
-            console.info(`🔄 Tentando stream no novo servidor: ${newUrl}`);
-            audio.src = newUrl;
-            audio.play().catch(() => {});
-            return { ...prev, isPlaying: true };
-          }
-          return { ...prev, isPlaying: false };
-        });
-      } else {
-        console.error("❌ Todos os servidores falharam para reprodução");
+      const currentTrack = currentTrackRef.current;
+
+      if (!currentTrack?.url) return;
+
+      if (retryCountRef.current >= maxRetries) {
+        console.error("❌ todos servidores falharam");
         retryCountRef.current = 0;
         setState(s => ({ ...s, isPlaying: false }));
+        return;
       }
+
+      retryCountRef.current++;
+      markServerFailed();
+
+      const newSrc = getStreamUrl(currentTrack.url);
+
+      console.log("🔄 retry stream:", newSrc);
+
+      audio.pause();
+      audio.src = newSrc;
+
+      setTimeout(() => {
+        audio.play().catch(() => {});
+      }, 300);
     };
 
     audio.addEventListener("timeupdate", onTimeUpdate);

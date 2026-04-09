@@ -107,7 +107,9 @@ export async function getTrackInfo(url: string): Promise<Track> {
 
 // Síncrono — usa o servidor ativo no momento da chamada
 export function getStreamUrl(videoUrl: string): string {
-    return `${getActiveBase()}/stream?url=${encodeURIComponent(videoUrl)}`;
+    const base = getActiveBase();
+    const safeUrl = encodeURIComponent(videoUrl.trim());
+    return `${base}/stream?url=${safeUrl}`;
 }
 
 export function getDownloadUrl(videoUrl: string, title: string): string {
@@ -129,4 +131,26 @@ export async function fetchAudioBlob(videoUrl: string): Promise<Blob> {
         if (!res.ok) throw new Error(`Servidor retornou ${res.status}`);
         return res.blob();
     });
+}
+
+/**
+ * Busca a URL direta do áudio via /offline-url e faz o download
+ * direto da fonte (sem passar pelo proxy do servidor).
+ * Muito mais rápido para salvar offline.
+ */
+export async function fetchDirectAudioBlob(videoUrl: string): Promise<Blob> {
+    const { audioUrl } = await tryEachServer(async (base) => {
+        const res = await fetchWithTimeout(
+            `${base}/offline-url?url=${encodeURIComponent(videoUrl)}`,
+            {},
+            15000, // yt-dlp pode demorar um pouco
+        );
+        if (!res.ok) throw new Error(`Servidor retornou ${res.status}`);
+        return res.json();
+    });
+
+    // Baixa direto da fonte (YouTube CDN), sem passar pelo seu servidor
+    const res = await fetch(audioUrl);
+    if (!res.ok) throw new Error(`Erro ao baixar áudio: ${res.status}`);
+    return res.blob();
 }

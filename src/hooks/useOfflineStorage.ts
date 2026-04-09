@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { openDB, DBSchema } from "idb";
-import { Track, getStreamUrl, fetchAudioBlob } from "@/lib/api";
+import {
+    Track,
+    getStreamUrl,
+    fetchAudioBlob,
+    fetchDirectAudioBlob,
+} from "@/lib/api";
 import { toast } from "sonner";
 
 interface OfflineDB extends DBSchema {
@@ -67,7 +72,7 @@ export function useOfflineStorage() {
                 );
 
                 // Fetch audio
-                const audioBlob = await fetchAudioBlob(track.url);
+                const audioBlob = await fetchDirectAudioBlob(track.url);
 
                 // Fetch thumbnail
                 let thumbnailBlob: Blob | undefined;
@@ -183,8 +188,13 @@ export function useOfflineStorage() {
 
             toast.info(`Salvando ${unsaved.length} músicas offline...`);
 
-            for (const track of unsaved) {
-                await saveTrackOffline(track);
+            // Processa 3 músicas ao mesmo tempo (evita sobrecarregar o servidor)
+            const CONCURRENCY = 3;
+            for (let i = 0; i < unsaved.length; i += CONCURRENCY) {
+                const batch = unsaved.slice(i, i + CONCURRENCY);
+                await Promise.allSettled(
+                    batch.map((track) => saveTrackOffline(track)),
+                );
             }
         },
         [offlineTrackIds, saveTrackOffline],
