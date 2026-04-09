@@ -1,27 +1,16 @@
 import { useState } from "react";
-import { Search, ListMusic, Plus, LogOut, Music2, Clock, Home, ChevronDown, ChevronRight } from "lucide-react";
+import { Search, ListMusic, Plus, LogOut, Music2, Clock, Home, ChevronDown, ChevronRight, WifiOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
+import { useOfflineMode } from "@/hooks/useOfflineMode";
 
-export interface PlaylistMeta {
-  id: string;
-  name: string;
-}
-
-interface SidebarProps {
-  playlists: PlaylistMeta[];
-  activeView: string;
-  onViewChange: (view: string) => void;
-  onCreatePlaylist: (name: string) => void | Promise<string>;
-}
-
-export default function Sidebar({ playlists, activeView, onViewChange, onCreatePlaylist }: SidebarProps) {
+export default function Sidebar({ playlists, activeView, onViewChange, onCreatePlaylist }) {
   const { user, signOut } = useAuth();
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [playlistsOpen, setPlaylistsOpen] = useState(true);
+  const { forceOffline, toggle: toggleOfflineMode } = useOfflineMode();
 
   const handleCreate = () => {
     if (newName.trim()) {
@@ -141,6 +130,28 @@ export default function Sidebar({ playlists, activeView, onViewChange, onCreateP
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+
+      {/* Offline Mode Toggle */}
+      <div className="px-3 pb-2">
+        <button
+          onClick={toggleOfflineMode}
+          className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+            forceOffline
+              ? "bg-amber-500/10 text-amber-500 border border-amber-500/20"
+              : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+          }`}
+          title={forceOffline ? "Desativar modo offline" : "Ativar modo offline"}
+        >
+          <WifiOff className="h-[18px] w-[18px]" />
+          <span>Modo Offline</span>
+          {!navigator.onLine && !forceOffline && (
+            <span className="ml-auto text-[10px] text-amber-500 font-semibold">sem rede</span>
+          )}
+          {forceOffline && (
+            <span className="ml-auto text-[10px] font-semibold">ativo</span>
+          )}
+        </button>
       </div>
 
       {/* User */}

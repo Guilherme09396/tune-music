@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { formatDuration } from "@/lib/api";
 import {
@@ -10,13 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 
-interface PlayerBarProps {
-  onToggleLyrics?: () => void;
-  lyricsOpen?: boolean;
-  getOfflineThumbnailUrl?: (trackId: string) => Promise<string | null>;
-}
-
-export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbnailUrl }: PlayerBarProps) {
+export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbnailUrl }) {
   const {
     currentTrack, isPlaying, currentTime, duration, volume,
     togglePlay, seekTo, setVolume, nextTrack, prevTrack,
@@ -24,7 +18,16 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbn
   } = usePlayer();
   const isMobile = useIsMobile();
   const [expanded, setExpanded] = useState(false);
-  const [thumbnailSrc, setThumbnailSrc] = useState<string>("");
+  const [thumbnailSrc, setThumbnailSrc] = useState("");
+  const [seekValue, setSeekValue] = useState(0);
+  const isDraggingRef = useRef(false);
+
+  // Sync seek value with currentTime only when not dragging
+  useEffect(() => {
+    if (!isDraggingRef.current) {
+      setSeekValue(currentTime);
+    }
+  }, [currentTime]);
 
   // Resolve capa offline quando necessário
   useEffect(() => {
@@ -40,7 +43,7 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbn
 
   if (!currentTrack) return null;
 
-  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progress = duration > 0 ? (seekValue / duration) * 100 : 0;
 
   const handleDownload = () => {
     const a = document.createElement("a");
@@ -51,6 +54,16 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbn
   };
 
   const VolumeIcon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2;
+
+  const handleSeekChange = (e) => {
+    isDraggingRef.current = true;
+    setSeekValue(Number(e.target.value));
+  };
+
+  const handleSeekCommit = (e) => {
+    seekTo(Number(e.target.value));
+    isDraggingRef.current = false;
+  };
 
   // Mobile expanded player
   if (isMobile && expanded) {
@@ -78,13 +91,15 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbn
 
           <div className="w-full px-2">
             <input
-              type="range" min={0} max={duration || 100} value={currentTime}
-              onChange={e => seekTo(Number(e.target.value))}
+              type="range" min={0} max={duration || 100} value={seekValue}
+              onChange={handleSeekChange}
+              onMouseUp={handleSeekCommit}
+              onTouchEnd={handleSeekCommit}
               className="w-full h-1"
               style={{ background: `linear-gradient(to right, hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}%)` }}
             />
             <div className="flex justify-between mt-1">
-              <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(currentTime)}</span>
+              <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(seekValue)}</span>
               <span className="text-xs text-muted-foreground tabular-nums">{formatDuration(duration)}</span>
             </div>
           </div>
@@ -193,9 +208,16 @@ export default function PlayerBar({ onToggleLyrics, lyricsOpen, getOfflineThumbn
               </button>
             </div>
             <div className="flex w-full max-w-md items-center gap-2">
-              <span className="text-[11px] text-muted-foreground w-10 text-right tabular-nums">{formatDuration(currentTime)}</span>
+              <span className="text-[11px] text-muted-foreground w-10 text-right tabular-nums">{formatDuration(seekValue)}</span>
               <div className="relative flex-1">
-                <input type="range" min={0} max={duration || 100} value={currentTime} onChange={e => seekTo(Number(e.target.value))} className="w-full h-1 cursor-pointer" style={{ background: `linear-gradient(to right, hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}%)` }} />
+                <input
+                  type="range" min={0} max={duration || 100} value={seekValue}
+                  onChange={handleSeekChange}
+                  onMouseUp={handleSeekCommit}
+                  onTouchEnd={handleSeekCommit}
+                  className="w-full h-1 cursor-pointer"
+                  style={{ background: `linear-gradient(to right, hsl(var(--primary)) ${progress}%, hsl(var(--muted)) ${progress}%)` }}
+                />
               </div>
               <span className="text-[11px] text-muted-foreground w-10 tabular-nums">{formatDuration(duration)}</span>
             </div>
