@@ -14,6 +14,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
+import { useOfflineMode } from "@/hooks/useOfflineMode";
+
 
 interface PlaylistViewProps {
   playlist: { id: string; name: string; tracks: Track[]; visibility?: PlaylistVisibility; share_id?: string | null };
@@ -72,15 +74,9 @@ export default function PlaylistView({
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
   const [copied, setCopied] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const { isOffline } = useOfflineMode();
+  const isOnline = !isOffline; // todas as referências a isOnline continuam funcionando
 
-  useEffect(() => {
-    const on = () => setIsOnline(true);
-    const off = () => setIsOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
 
   const visibleTracks = isOnline
     ? playlist.tracks

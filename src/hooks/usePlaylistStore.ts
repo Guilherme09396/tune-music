@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Track } from "@/lib/api";
 import { toast } from "sonner";
+import { useOfflineMode } from "@/hooks/useOfflineMode";
 
 export type PlaylistVisibility = "private" | "link" | "public";
 
@@ -40,6 +41,7 @@ function loadCachedPlaylists(): Playlist[] {
 
 export function usePlaylistStore() {
     const { user } = useAuth();
+    const { isOffline } = useOfflineMode();
     const [playlists, setPlaylists] = useState<Playlist[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -50,8 +52,8 @@ export function usePlaylistStore() {
             return;
         }
 
-        // 👇 Se offline, carrega do cache imediatamente
-        if (!navigator.onLine) {
+        // Se offline (por rede ou por toggle), carrega do cache
+        if (isOffline) {
             setPlaylists(loadCachedPlaylists());
             setLoading(false);
             return;
@@ -93,26 +95,28 @@ export function usePlaylistStore() {
                 });
             }
             setPlaylists(playlistsWithTracks);
-            saveCachedPlaylists(playlistsWithTracks); // 👈 Salva no cache após carregar
+            saveCachedPlaylists(playlistsWithTracks);
         } catch (err) {
             console.error("Error fetching playlists:", err);
-            // 👇 Fallback pro cache se o Supabase falhar
             const cached = loadCachedPlaylists();
             if (cached.length > 0) setPlaylists(cached);
         } finally {
             setLoading(false);
         }
-    }, [user]);
+    }, [user, isOffline]);
 
-    useEffect(() => {
-        const handleOnline = () => fetchPlaylists();
-        window.addEventListener("online", handleOnline);
-        return () => window.removeEventListener("online", handleOnline);
-    }, [fetchPlaylists]);
-
+    // Re-fetch quando o status offline muda
     useEffect(() => {
         fetchPlaylists();
     }, [fetchPlaylists]);
+
+    useEffect(() => {
+        const handleOnline = () => {
+            if (!isOffline) fetchPlaylists();
+        };
+        window.addEventListener("online", handleOnline);
+        return () => window.removeEventListener("online", handleOnline);
+    }, [fetchPlaylists, isOffline]);
 
     const createPlaylist = useCallback(
         async (name: string): Promise<string> => {
@@ -225,7 +229,6 @@ export function usePlaylistStore() {
 
             const updates: any = { visibility };
 
-            // Generate share_id if sharing and doesn't have one
             if (visibility !== "private" && !pl.share_id) {
                 updates.share_id = generateShareId();
             }
@@ -273,7 +276,6 @@ export function usePlaylistStore() {
 
     const fetchSharedPlaylist = useCallback(
         async (shareId: string): Promise<Playlist | null> => {
-            // Use raw filter to avoid deep type instantiation issues
             const { data: pls, error } = await supabase
                 .from("playlists")
                 .select("*")
@@ -323,7 +325,6 @@ export function usePlaylistStore() {
                 return "";
             }
 
-            // Copy all tracks
             if (sharedPlaylist.tracks.length > 0) {
                 const trackInserts = sharedPlaylist.tracks.map((track, i) => ({
                     playlist_id: data.id,
@@ -335,7 +336,6 @@ export function usePlaylistStore() {
                     url: track.url,
                     position: i,
                 }));
-
                 const { error: tError } = await supabase
                     .from("playlist_tracks")
                     .insert(trackInserts);
