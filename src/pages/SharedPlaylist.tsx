@@ -141,7 +141,7 @@ function SharedContent() {
           })}
         </div>
       </div>
-      <PlayerBar />
+      <PlayerBar getOfflineThumbnailUrl={() => ""} lyricsOpen={false} onToggleLyrics={() => {}} />
     </div>
   );
 }
