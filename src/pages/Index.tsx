@@ -6,6 +6,7 @@ import PlayerBar from "@/components/PlayerBar";
 import HomeView from "@/components/HomeView";
 import HistoryView from "@/components/HistoryView";
 import LyricsPanel from "@/components/LyricsPanel";
+import ProfileSettings from "@/components/ProfileSettings";
 
 import { usePlaylistStore } from "@/hooks/usePlaylistStore";
 import { useOfflineStorage } from "@/hooks/useOfflineStorage";
@@ -117,6 +118,7 @@ function AppContent() {
         {activeView === "home" && <HomeView onNavigate={handleViewChange} />}
         {activeView === "search" && <SearchView onAddToPlaylist={handleAddToPlaylist} />}
         {activeView === "history" && <HistoryView />}
+        {activeView === "profile" && <ProfileSettings />}
 
         {activePlaylist && (
           <PlaylistView

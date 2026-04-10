@@ -63,10 +63,10 @@ export function useListeningHistory() {
 
             const { data: existing } = await supabase
                 .from("listening_history")
-                .select("id, play_count, listened_seconds")
+                .select("id, play_count, listened_seconds" as any)
                 .eq("user_id", user.id)
                 .eq("track_id", track.id)
-                .single();
+                .single() as any;
 
             if (existing) {
                 await supabase

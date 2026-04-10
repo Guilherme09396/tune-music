@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import Index from "./pages/Index.tsx";
 import Auth from "./pages/Auth.tsx";
 import SharedPlaylist from "./pages/SharedPlaylist.tsx";
+import PublicProfile from "./pages/PublicProfile.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import { PlayerHistoryBridge } from "@/components/PlayerHistoryBridge";
 
@@ -43,6 +44,7 @@ const App = () => (
           <PlayerHistoryBridge>
           <Routes>
             <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+            <Route path="/profile/:username" element={<PublicProfile />} />
             <Route path="/shared/:shareId" element={<SharedPlaylist />} />
             <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
