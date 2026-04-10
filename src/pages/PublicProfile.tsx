@@ -35,7 +35,7 @@ function ProfileContent() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [expandedPlaylist, setExpandedPlaylist] = useState<string | null>(null);
-  const { playTrack, setQueue, currentTrack, isPlaying, togglePlay } = usePlayer();
+  const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayer();
 
   useEffect(() => {
     if (!username) return;
@@ -59,8 +59,7 @@ function ProfileContent() {
 
   const handlePlayPlaylist = (pl: PublicPlaylist, startIndex = 0) => {
     if (pl.tracks.length === 0) return;
-    setQueue(pl.tracks);
-    playTrack(pl.tracks[startIndex]);
+    playTrack(pl.tracks[startIndex], pl.tracks);
   };
 
   if (loading) {
