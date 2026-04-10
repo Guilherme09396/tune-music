@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Search, ListMusic, Plus, LogOut, Music2, Clock, Home, ChevronDown, ChevronRight, WifiOff } from "lucide-react";
+import { Search, ListMusic, Plus, LogOut, Music2, Clock, Home, ChevronDown, ChevronRight, WifiOff, User } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
@@ -24,6 +24,7 @@ export default function Sidebar({ playlists, activeView, onViewChange, onCreateP
     { id: "home", icon: Home, label: "Início" },
     { id: "search", icon: Search, label: "Buscar" },
     { id: "history", icon: Clock, label: "Histórico" },
+    { id: "profile", icon: User, label: "Meu Perfil" },
   ];
 
   return (
