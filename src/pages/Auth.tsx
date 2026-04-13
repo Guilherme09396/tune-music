@@ -8,25 +8,18 @@ import { toast } from "sonner";
 import { motion } from "framer-motion";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isLogin) {
-        await signIn(email, password);
-        toast.success("Login realizado!");
-      } else {
-        await signUp(email, password, name);
-        toast.success("Conta criada! Verifique seu email.");
-      }
+      await signIn(email, password);
+      toast.success("Login realizado!");
       navigate("/");
     } catch (err: any) {
       toast.error(err.message || "Erro na autenticação");
@@ -78,7 +71,7 @@ export default function Auth() {
         </motion.div>
       </div>
 
-      {/* Right panel - form */}
+      {/* Right panel - login only */}
       <div className="flex flex-1 items-center justify-center px-6">
         <motion.div
           initial={{ opacity: 0, x: 20 }}
@@ -94,27 +87,11 @@ export default function Auth() {
           </div>
 
           <div className="hidden lg:block">
-            <h2 className="text-2xl font-bold text-foreground">
-              {isLogin ? "Bem-vindo de volta" : "Crie sua conta"}
-            </h2>
-            <p className="text-muted-foreground text-sm mt-1">
-              {isLogin ? "Entre para continuar ouvindo" : "Comece sua jornada musical"}
-            </p>
+            <h2 className="text-2xl font-bold text-foreground">Bem-vindo de volta</h2>
+            <p className="text-muted-foreground text-sm mt-1">Entre para continuar ouvindo</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <div>
-                <label className="text-sm font-medium text-foreground mb-1.5 block">Nome</label>
-                <Input
-                  placeholder="Seu nome"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  required={!isLogin}
-                  className="h-11 bg-muted/50 border-border/50 rounded-xl focus:ring-primary/30"
-                />
-              </div>
-            )}
             <div>
               <label className="text-sm font-medium text-foreground mb-1.5 block">Email</label>
               <Input
@@ -144,18 +121,12 @@ export default function Auth() {
               disabled={loading}
             >
               {loading && <Loader2 className="animate-spin" />}
-              {isLogin ? "Entrar" : "Criar conta"}
+              Entrar
             </Button>
           </form>
 
-          <p className="text-center text-sm text-muted-foreground">
-            {isLogin ? "Não tem conta?" : "Já tem conta?"}{" "}
-            <button
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-primary hover:underline font-semibold"
-            >
-              {isLogin ? "Criar conta" : "Fazer login"}
-            </button>
+          <p className="text-center text-xs text-muted-foreground">
+            Contas são criadas por um administrador.
           </p>
         </motion.div>
       </div>

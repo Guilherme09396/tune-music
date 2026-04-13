@@ -7,12 +7,15 @@ import HomeView from "@/components/HomeView";
 import HistoryView from "@/components/HistoryView";
 import LyricsPanel from "@/components/LyricsPanel";
 import ProfileSettings from "@/components/ProfileSettings";
+import AdminPanel from "@/components/AdminPanel";
+import ChangePasswordDialog from "@/components/ChangePasswordDialog";
 
 import { usePlaylistStore } from "@/hooks/usePlaylistStore";
 import { useOfflineStorage } from "@/hooks/useOfflineStorage";
 import { PlayerProvider, usePlayer } from "@/contexts/PlayerContext";
 import { useListeningHistory } from "@/hooks/useListeningHistory";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useMustChangePassword } from "@/hooks/useMustChangePassword";
 import { Track } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -36,6 +39,7 @@ function AppContent() {
   const { currentTrack, currentTime } = usePlayer();
   const isMobile = useIsMobile();
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const { mustChange, clear: clearMustChange } = useMustChangePassword();
   const prevTrackRef = useRef<{ track: Track; listenedTime: number } | null>(null);
 
   useEffect(() => {
@@ -119,6 +123,7 @@ function AppContent() {
         {activeView === "search" && <SearchView onAddToPlaylist={handleAddToPlaylist} />}
         {activeView === "history" && <HistoryView />}
         {activeView === "profile" && <ProfileSettings />}
+        {activeView === "admin" && <AdminPanel />}
 
         {activePlaylist && (
           <PlaylistView
@@ -143,6 +148,7 @@ function AppContent() {
         getOfflineThumbnailUrl={getOfflineThumbnailUrl}
       />
       <LyricsPanel open={lyricsOpen} onClose={() => setLyricsOpen(false)} />
+      <ChangePasswordDialog open={mustChange} onDone={clearMustChange} />
 
       <Dialog open={!!addToPlaylistTrack} onOpenChange={() => setAddToPlaylistTrack(null)}>
         <DialogContent className="bg-card border-border/50 rounded-2xl">
